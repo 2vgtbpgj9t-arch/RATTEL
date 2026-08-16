@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ラッテル ‐ プレイモード選択</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void:#0e0b08; --panel:#1b140d; --panel-line:#3a2c1a;
+    --gold:#c9a24b; --gold-bright:#e8c874; --turq:#3e9c93;
+    --papyrus:#ead9b4; --papyrus-dim:#a9926a;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background: radial-gradient(ellipse at 50% -10%, #241a10 0%, var(--void) 55%), var(--void);
+    color:var(--papyrus); font-family:'EB Garamond', serif;
+    min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:24px;
+  }
+  .eyebrow{font-family:'Space Mono', monospace; letter-spacing:.3em; text-transform:uppercase; font-size:12px; color:var(--turq); margin-bottom:14px;}
+  h1{font-family:'Cinzel', serif; font-weight:700; font-size:clamp(28px,6vw,44px); color:var(--gold-bright); margin:0 0 10px; text-align:center;}
+  p.lede{max-width:520px; text-align:center; font-size:17px; line-height:1.8; color:var(--papyrus); margin:0 0 32px;}
+  
+  .online-box{
+    background:var(--panel); border:1px solid var(--gold); border-radius:10px;
+    padding:24px 28px; width:100%; max-width:480px; text-align:center; margin-bottom:28px;
+    box-shadow:0 8px 30px rgba(0,0,0,.4);
+  }
+  .online-box h2{font-family:'Cinzel', serif; font-size:20px; color:var(--gold-bright); margin:0 0 8px;}
+  .online-box p{font-size:13px; color:var(--papyrus-dim); margin:0 0 18px; line-height:1.6;}
+  .input-group{display:flex; flex-direction:column; gap:8px; margin-bottom:14px; text-align:left;}
+  .input-group label{font-family:'Space Mono', monospace; font-size:11px; color:var(--turq); letter-spacing:.05em;}
+  .input-group input{
+    background:var(--void); border:1px solid var(--panel-line); border-radius:4px;
+    padding:10px 14px; font-family:'Space Mono', monospace; font-size:14px; color:var(--papyrus);
+    outline:none; transition:border-color .15s ease;
+  }
+  .input-group input:focus{border-color:var(--gold-bright);}
+  .btn-online{
+    width:100%; font-family:'Cinzel', serif; font-weight:600; font-size:15px; color:var(--void);
+    background:linear-gradient(180deg, var(--gold-bright), var(--gold)); border:1px solid #8a6a2e;
+    padding:12px 20px; border-radius:4px; cursor:pointer; transition:transform .15s ease, box-shadow .15s ease;
+  }
+  .btn-online:hover{transform:translateY(-2px); box-shadow:0 6px 20px rgba(201,162,75,.3);}
+
+  .section-title{font-family:'Cinzel', serif; font-size:15px; color:var(--papyrus-dim); margin:10px 0 16px; text-align:center; letter-spacing:.08em;}
+
+  .choices{display:flex; gap:14px; flex-wrap:wrap; justify-content:center; max-width:640px;}
+  .choice{
+    background:var(--panel); border:1px solid var(--panel-line); border-radius:8px;
+    padding:20px 16px; width:120px; text-align:center; text-decoration:none; color:var(--papyrus);
+    transition:transform .15s ease, border-color .15s ease, box-shadow .15s ease;
+  }
+  .choice:hover{transform:translateY(-4px); border-color:var(--gold); box-shadow:0 10px 26px rgba(201,162,75,.2);}
+  .choice .num{font-family:'Cinzel', serif; font-size:32px; color:var(--gold-bright); line-height:1;}
+  .choice .label{font-family:'Space Mono', monospace; font-size:10px; letter-spacing:.08em; color:var(--papyrus-dim); margin-top:6px;}
+  .choice .fill{font-size:10px; color:var(--papyrus-dim); margin-top:6px; line-height:1.4;}
+
+  a.back-link{position:fixed; top:16px; left:18px; font-family:'Space Mono', monospace; font-size:11px; color:var(--papyrus-dim); text-decoration:none;}
+  a.back-link:hover{color:var(--gold-bright);}
+</style>
+</head>
+<body>
+<a class="back-link" href="index.html">← タイトルへ</a>
+<div class="eyebrow">TABLE SETUP</div>
+<h1>対戦モード選択</h1>
+<p class="lede">合言葉で友達とオンライン対戦するか、1台の端末で遊ぶローカル対戦を選べます。</p>
+
+<div class="online-box">
+  <h2>オンライン対戦（合言葉）</h2>
+  <p>同じ合言葉を入力した相手と同じ部屋に入ります（サーバー不要）。</p>
+  <form id="onlineForm">
+    <div class="input-group">
+      <label for="roomKey">合言葉（部屋のキーワード）</label>
+      <input type="text" id="roomKey" placeholder="例：ひみつの部屋" required autocomplete="off">
+    </div>
+    <div class="input-group">
+      <label for="playerName">あなたの名前</label>
+      <input type="text" id="playerName" placeholder="例：プレイヤー1" required autocomplete="off">
+    </div>
+    <button type="submit" class="btn-online">部屋に入る / 作る →</button>
+  </form>
+</div>
+
+<div class="section-title">― 1台の画面を交互に回して遊ぶ（ローカル） ―</div>
+
+<div class="choices">
+  <a class="choice" href="game.html?players=1">
+    <div class="num">1</div>
+    <div class="label">SOLO</div>
+    <div class="fill">CPU × 3</div>
+  </a>
+  <a class="choice" href="game.html?players=2">
+    <div class="num">2</div>
+    <div class="label">DUO</div>
+    <div class="fill">CPU × 2</div>
+  </a>
+  <a class="choice" href="game.html?players=3">
+    <div class="num">3</div>
+    <div class="label">TRIO</div>
+    <div class="fill">CPU × 1</div>
+  </a>
+  <a class="choice" href="game.html?players=4">
+    <div class="num">4</div>
+    <div class="label">FULL</div>
+    <div class="fill">CPU × 0</div>
+  </a>
+</div>
+
+<script>
+document.getElementById('onlineForm').addEventListener('submit', function(e){
+  e.preventDefault();
+  const room = document.getElementById('roomKey').value.trim();
+  const name = document.getElementById('playerName').value.trim();
+  if(room && name){
+    window.location.href = `game.html?mode=online&room=${encodeURIComponent(room)}&name=${encodeURIComponent(name)}`;
+  }
+});
+</script>
+</body>
+</html>

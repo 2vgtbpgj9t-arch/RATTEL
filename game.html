@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ラッテル ‐ game</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<!-- PeerJS P2P Library -->
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+  :root{
+    --void:#0e0b08; --panel:#1b140d; --panel2:#241a10; --panel-line:#3a2c1a;
+    --gold:#c9a24b; --gold-bright:#e8c874; --copper:#b5713a; --copper-lit:#ffb15c;
+    --oxide:#a23b2e; --oxide-bright:#d1584a;
+    --papyrus:#ead9b4; --papyrus-dim:#8a7752;
+    --frame-pink:#e8629b; --frame-blue:#4a90d9; --frame-green:#52b788; --frame-yellow:#e8c34a;
+    --sym-hatiron:#e8c34a; --sym-anon:#a06fd1; --sym-doon:#d1584a; --sym-yaaru:#4a90d9;
+    --bg-a: var(--void); --bg-b: #241a10; --mode-accent: var(--gold-bright);
+    --tr: background .6s ease, color .6s ease, border-color .6s ease;
+  }
+  body.underworld{
+    --bg-a:#0a0e1c; --bg-b:#16213e; --mode-accent: var(--oxide-bright);
+    --panel:#131a30; --panel2:#1b2848; --panel-line:#2c3a63;
+    --gold:#7c8fd9; --gold-bright:#a6b4ec; --papyrus:#d8def0; --papyrus-dim:#69709c;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{
+    background: radial-gradient(ellipse at 50% -10%, var(--bg-b) 0%, var(--bg-a) 60%), var(--bg-a);
+    color:var(--papyrus); font-family:'Space Mono', monospace;
+    min-height:100vh; display:flex; flex-direction:column; transition:var(--tr); overflow-x:hidden;
+  }
+
+  .glyph-strip{width:100%; height:22px; display:flex; align-items:center; justify-content:center; gap:20px; background:linear-gradient(180deg, var(--panel2), transparent); border-bottom:1px solid var(--panel-line); overflow:hidden; flex:none; transition:var(--tr);}
+  .glyph-strip svg{width:12px;height:12px;opacity:.4;flex:none;}
+  .glyph-strip svg .g-line{stroke:var(--gold); transition:stroke .6s ease;}
+
+  .topbar{display:flex; align-items:center; justify-content:space-between; padding:10px 16px; border-bottom:1px solid var(--panel-line); flex:none; flex-wrap:wrap; gap:6px;}
+  .brand{font-family:'Cinzel', serif; font-weight:700; letter-spacing:.08em; font-size:17px; color:var(--gold-bright);}
+  .mode-pill{font-size:10px; letter-spacing:.1em; padding:4px 11px; border:1px solid var(--panel-line); border-radius:20px; color:var(--mode-accent); margin-left:10px; transition:var(--tr);}
+  .match-pill{font-size:10px; letter-spacing:.1em; padding:4px 11px; border:1px solid var(--panel-line); border-radius:20px; color:var(--papyrus-dim); margin-left:8px;}
+  .room-pill{font-size:10px; letter-spacing:.05em; padding:4px 11px; border:1px solid var(--gold); border-radius:20px; color:var(--gold-bright); margin-left:8px; display:none;}
+  a.back-link{font-size:10px; color:var(--papyrus-dim); text-decoration:none;}
+  a.back-link:hover{color:var(--gold-bright);}
+  #sfxToggle{font-family:'Space Mono',monospace; font-size:10px; color:var(--papyrus-dim); background:none; border:1px solid var(--panel-line); border-radius:14px; padding:4px 10px; cursor:pointer;}
+  #sfxToggle:hover{color:var(--gold-bright); border-color:var(--gold);}
+
+  .table-outer{flex:1; display:flex; flex-direction:column; align-items:center; padding:10px 10px 0;}
+  .mahjong-table{display:grid; grid-template-columns:1fr 1.5fr 1fr; grid-template-rows:auto auto; gap:8px; width:100%; max-width:800px; align-items:center;}
+  .seat{position:relative; background:var(--panel); border:1px solid var(--panel-line); border-radius:8px; padding:8px 10px; text-align:center; transition:border-color .25s ease, box-shadow .25s ease;}
+  .slot0{grid-column:2; grid-row:1;} .slot1{grid-column:1; grid-row:2;} .slot2{grid-column:3; grid-row:2;}
+  .center-well{grid-column:2; grid-row:2; background:var(--panel2); border:1px solid var(--panel-line); border-radius:10px; padding:12px 8px; display:flex; flex-direction:column; align-items:center; gap:8px;}
+  .seat.active-turn{border-color:var(--gold-bright); box-shadow:0 0 0 2px rgba(232,200,116,.25), 0 0 18px rgba(232,200,116,.18);}
+  .seat-dir{font-size:10px; color:var(--gold); letter-spacing:.05em;}
+  .seat-name{font-size:11px; color:var(--papyrus);}
+  .seat-backs{display:flex; gap:3px; justify-content:center; margin:5px 0 4px;}
+  .card-back{width:16px; height:23px; border-radius:2px; background:repeating-linear-gradient(45deg, var(--panel2), var(--panel2) 3px, var(--panel-line) 3px, var(--panel-line) 6px); border:1px solid var(--panel-line);}
+  .lamps{display:flex; gap:4px; justify-content:center; margin-top:4px;}
+  .lamp{width:8px; height:8px; border-radius:50%; background:#3a2c1a; border:1px solid var(--copper); transition:background .3s ease, box-shadow .3s ease;}
+  .lamp.lit{background:var(--copper-lit); box-shadow:0 0 7px var(--copper-lit);}
+
+  .round-info-row{display:flex; align-items:center; gap:8px;}
+  .round-info{font-size:10px; letter-spacing:.15em; color:var(--papyrus-dim);}
+  .skill-lamp{width:11px; height:11px; border-radius:50%; background:var(--copper-lit); box-shadow:0 0 8px var(--copper-lit); border:1px solid var(--copper); transition:background .4s ease, box-shadow .4s ease;}
+  .skill-lamp.off{background:#241a10; box-shadow:none;}
+  .field-cross{display:grid; grid-template-columns:56px 56px 56px; grid-template-rows:auto 76px auto; gap:3px 6px; align-items:center; justify-items:center;}
+  .field-slot{display:flex; flex-direction:column; align-items:center; gap:2px;}
+  .field-slot .dir-label{font-size:9px; letter-spacing:.1em; color:var(--gold);}
+  .fs-N{grid-column:2; grid-row:1;} .fs-W{grid-column:1; grid-row:2;} .fs-E{grid-column:3; grid-row:2;} .fs-S{grid-column:2; grid-row:3;}
+  .field-center-mark{grid-column:2; grid-row:2; width:6px; height:6px; border-radius:50%; background:var(--panel-line);}
+
+  .card{width:52px; height:74px; border-radius:6px; background:linear-gradient(160deg, var(--panel2), var(--panel)); border:2px solid var(--frame, var(--gold)); display:flex; align-items:center; justify-content:center; position:relative; box-shadow:0 4px 12px rgba(0,0,0,.4); transition:transform .16s ease, box-shadow .16s ease, outline .15s ease; flex:none;}
+  .card.large{width:72px; height:102px;}
+  .card.small{width:38px; height:54px;}
+  .card.selectable{cursor:pointer;}
+  .card.selectable:hover{transform:translateY(-5px);}
+  .card.chosen{outline:2px solid var(--frame-blue); outline-offset:2px;}
+  .card.new-swap{animation:swap-flash 1.1s ease;}
+  @keyframes swap-flash{0%{box-shadow:0 0 0 0 rgba(74,144,217,.85);}40%{box-shadow:0 0 0 8px rgba(74,144,217,.25);}100%{box-shadow:0 4px 12px rgba(0,0,0,.4);}}
+  .pip-grid{display:flex; flex-wrap:wrap; gap:2px; justify-content:center; align-items:center; width:100%; padding:4px;}
+  .pip{width:12px; height:12px; flex:none;}
+  .card.large .pip{width:16px; height:16px;}
+  .card.small .pip{width:9px; height:9px;}
+
+  .self-area{width:100%; max-width:800px; margin:6px auto 0; padding:0 10px; position:relative;}
+  .self-row{display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;}
+  .self-id{display:flex; align-items:center; gap:10px;}
+  .self-id .seat-name{margin:0; font-size:12px;}
+  .hand{display:flex; gap:10px; justify-content:center; padding:6px 0 4px;}
+  .hint{font-size:10px; color:var(--papyrus-dim); text-align:center; margin-top:2px;}
+
+  .log-line{min-height:18px; text-align:center; font-size:12px; color:var(--gold-bright); margin:4px 0 2px; letter-spacing:.02em;}
+
+  .command-dock{flex:none; border-top:1px solid var(--panel-line); background:linear-gradient(180deg, transparent, var(--panel2)); padding:14px 12px 20px; margin-top:8px;}
+  .command-panel{display:flex; gap:9px; justify-content:center; flex-wrap:wrap; max-width:800px; margin:0 auto;}
+  .cmd-btn{font-family:'Cinzel', serif; font-weight:500; font-size:13px; letter-spacing:.02em; color:var(--papyrus); background:var(--panel); border:1px solid var(--panel-line); padding:11px 18px; border-radius:3px; cursor:pointer; transition:transform .12s ease, border-color .15s ease, background .15s ease, color .15s ease;}
+  .cmd-btn:hover{transform:translateY(-2px); border-color:var(--gold); color:var(--gold-bright);}
+  .cmd-btn:disabled{opacity:.3; cursor:default; transform:none;}
+  .cmd-btn:disabled:hover{border-color:var(--panel-line); color:var(--papyrus); background:var(--panel);}
+
+  footer.game-footer{text-align:center; padding:0 0 14px; font-size:9px; letter-spacing:.1em; color:#5a4a30;}
+
+  .speech-bubble{position:absolute; bottom:100%; left:50%; transform:translateX(-50%); background:var(--gold-bright); color:var(--void); padding:6px 13px; border-radius:14px; font-family:'Cinzel',serif; font-weight:700; font-size:12px; white-space:nowrap; box-shadow:0 4px 14px rgba(0,0,0,.4); animation:bubble-pop 2.1s ease forwards; z-index:6; pointer-events:none;}
+  .speech-bubble::after{content:''; position:absolute; top:100%; left:50%; transform:translateX(-50%); border:6px solid transparent; border-top-color:var(--gold-bright);}
+  @keyframes bubble-pop{0%{opacity:0; transform:translateX(-50%) translateY(6px) scale(.9);}12%{opacity:1; transform:translateX(-50%) translateY(0) scale(1);}86%{opacity:1;}100%{opacity:0; transform:translateX(-50%) translateY(-8px) scale(.95);}}
+
+  .moolgai-flash{position:fixed; inset:0; z-index:15; display:flex; align-items:center; justify-content:center; pointer-events:none; background:radial-gradient(circle, rgba(232,200,116,.28), rgba(0,0,0,.6)); opacity:0; animation:moolgai-flash 1.7s ease forwards;}
+  .moolgai-flash .txt{font-family:'Cinzel',serif; font-size:clamp(28px,7vw,52px); color:var(--gold-bright); text-shadow:0 0 30px rgba(232,200,116,.8); text-align:center; padding:0 20px;}
+  @keyframes moolgai-flash{0%{opacity:0;}12%{opacity:1;}82%{opacity:1;}100%{opacity:0;}}
+
+  .mc-chat{position:fixed; right:10px; top:56px; z-index:8; display:flex; flex-direction:column; gap:2px; width:min(62vw,300px); max-height:46vh; overflow-y:auto; pointer-events:auto;}
+  .mc-line{background:rgba(10,7,4,.6); color:#e9e9e9; font-family:'Space Mono',monospace; font-size:10.5px; padding:3px 7px; border-radius:2px; line-height:1.4;}
+  .mc-line b{color:var(--gold-bright);}
+
+  .pass-overlay{position:fixed; inset:0; background:var(--void); z-index:25; display:none; align-items:center; justify-content:center; flex-direction:column; gap:18px; text-align:center; padding:20px;}
+  .pass-overlay.show{display:flex;}
+  .pass-overlay .who{font-family:'Cinzel',serif; font-size:clamp(22px,6vw,34px); color:var(--gold-bright);}
+  .pass-overlay button{font-family:'Cinzel', serif; font-weight:600; font-size:14px; color:var(--void); background:linear-gradient(180deg, var(--gold-bright), var(--gold)); border:1px solid #8a6a2e; padding:13px 30px; border-radius:3px; cursor:pointer;}
+
+  /* Lobby Overlay for Online */
+  .lobby-overlay{position:fixed; inset:0; background:rgba(5,3,1,.92); display:none; align-items:center; justify-content:center; z-index:30; backdrop-filter:blur(4px); padding:20px;}
+  .lobby-overlay.show{display:flex;}
+  .lobby-card{background:var(--panel); border:1px solid var(--gold); border-radius:10px; padding:28px 32px; text-align:center; max-width:500px; width:100%;}
+  .lobby-card h2{font-family:'Cinzel', serif; color:var(--gold-bright); font-size:24px; margin:0 0 10px;}
+  .lobby-key{font-family:'Space Mono', monospace; font-size:18px; color:var(--turq); background:var(--void); padding:6px 16px; border-radius:4px; display:inline-block; margin-bottom:16px; border:1px solid var(--panel-line);}
+  .player-list{display:flex; flex-direction:column; gap:8px; margin:18px 0; text-align:left;}
+  .player-item{background:var(--panel2); border:1px solid var(--panel-line); padding:10px 14px; border-radius:6px; display:flex; justify-content:space-between; font-size:13px;}
+  .player-item.host{border-color:var(--gold);}
+
+  .overlay{position:fixed; inset:0; background:rgba(5,3,1,.88); display:none; align-items:center; justify-content:center; z-index:20; backdrop-filter:blur(2px); padding:20px;}
+  .overlay.show{display:flex;}
+  .overlay-card{background:var(--panel); border:1px solid var(--gold); border-radius:10px; padding:28px 32px; text-align:center; max-width:560px; max-height:88vh; overflow-y:auto;}
+  .overlay-card h2{font-family:'Cinzel', serif; color:var(--gold-bright); font-size:22px; margin:0 0 10px;}
+  .overlay-card p{font-size:12px; color:var(--papyrus-dim); margin:0 0 14px; line-height:1.6;}
+  .overlay-card .btn-row{display:flex; gap:10px; justify-content:center; flex-wrap:wrap;}
+  .overlay-card button{font-family:'Cinzel', serif; font-weight:600; font-size:13px; color:var(--void); background:linear-gradient(180deg, var(--gold-bright), var(--gold)); border:1px solid #8a6a2e; padding:11px 22px; border-radius:3px; cursor:pointer;}
+  .overlay-card button.ashura{color:#1a0d0a; background:linear-gradient(180deg, var(--oxide-bright), var(--oxide)); border-color:#6e1f16;}
+  .overlay-card button:disabled{opacity:.35; cursor:default;}
+  .reveal-grid{display:flex; gap:14px; flex-wrap:wrap; justify-content:center; margin-bottom:14px;}
+  .reveal-seat{background:var(--panel2); border:1px solid var(--panel-line); border-radius:8px; padding:10px; min-width:110px;}
+  .reveal-seat.winner{border-color:var(--gold-bright); box-shadow:0 0 16px rgba(232,200,116,.3);}
+  .reveal-seat .rs-name{font-size:11px; color:var(--papyrus); margin-bottom:6px;}
+  .reveal-seat .rs-hand{display:flex; gap:4px; justify-content:center; margin-bottom:6px;}
+  .reveal-seat .rs-score{font-size:14px; color:var(--gold-bright); font-family:'Space Mono',monospace;}
+</style>
+</head>
+<body>
+
+<div class="glyph-strip" id="glyphStrip" aria-hidden="true"></div>
+
+<div class="topbar">
+  <div style="display:flex;align-items:center;">
+    <a class="back-link" href="index.html">← タイトル</a>
+    <span class="brand" style="margin-left:14px;">RATTEL</span>
+    <span class="mode-pill" id="modePill">現世</span>
+    <span class="match-pill" id="matchPill">試合 1</span>
+    <span class="room-pill" id="roomPill"></span>
+  </div>
+  <button id="sfxToggle">♪ 音: ON</button>
+</div>
+
+<div class="table-outer">
+  <div class="mahjong-table">
+    <div class="seat slot0" id="seat-slot0"></div>
+    <div class="seat slot1" id="seat-slot1"></div>
+    <div class="center-well">
+      <div class="round-info-row">
+        <span class="round-info" id="roundInfo">試合 1</span>
+        <div class="skill-lamp lit" id="skillLampIcon" title="タッパー／ハムサハムの権利"></div>
+      </div>
+      <div class="field-cross" id="fieldCross"></div>
+    </div>
+    <div class="seat slot2" id="seat-slot2"></div>
+  </div>
+
+  <div class="self-area" id="selfArea">
+    <div class="self-row">
+      <div class="self-id">
+        <span class="seat-dir" id="selfDir">S</span>
+        <span class="seat-name" id="selfName">あなた</span>
+        <div class="lamps" id="lamps-self"></div>
+      </div>
+    </div>
+    <div class="hand" id="handCards"></div>
+    <div class="hint" id="handHint"></div>
+    <div class="log-line" id="messageLine"></div>
+  </div>
+</div>
+
+<div class="command-dock">
+  <div class="command-panel" id="commandPanel"></div>
+</div>
+
+<footer class="game-footer">RATTEL</footer>
+
+<div class="mc-chat" id="mcChat"></div>
+
+<!-- Online Lobby Modal -->
+<div class="lobby-overlay" id="lobbyOverlay">
+  <div class="lobby-card">
+    <h2>ONLINE LOBBY</h2>
+    <div class="lobby-key" id="lobbyKeyText">合言葉: ----</div>
+    <div class="player-list" id="lobbyPlayerList"></div>
+    <div id="lobbyStatusText" style="font-size:12px; color:var(--papyrus-dim); margin-bottom:16px;">接続中...</div>
+    <button id="lobbyStartBtn" style="display:none; font-family:'Cinzel',serif; padding:12px 24px; font-weight:700; background:linear-gradient(180deg, var(--gold-bright), var(--gold)); border:none; border-radius:4px; cursor:pointer;">対戦を開始する</button>
+  </div>
+</div>
+
+<div class="pass-overlay" id="passOverlay">
+  <div class="who" id="passWho"></div>
+  <div class="note" style="font-size:12px; color:var(--papyrus-dim);">端末を渡してください。準備ができたらタップして手札を表示します。</div>
+  <button id="passBtn">始める</button>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="overlay-card">
+    <h2 id="overlayTitle"></h2>
+    <div id="overlayReveal"></div>
+    <p id="overlayBody"></p>
+    <div id="ashuraArea"><div class="ashura-feedback" id="ashuraFeedback"></div></div>
+    <div class="btn-row" id="overlayBtnRow"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const SYMBOLS = ['hatiron','anon','doon','yaaru'];
+  const SYMBOL_LABEL = {hatiron:'ハティロン', anon:'アノン', doon:'ドーン', yaaru:'ヤール'};
+  const SYMBOL_COLOR_VAR = {hatiron:'var(--sym-hatiron)', anon:'var(--sym-anon)', doon:'var(--sym-doon)', yaaru:'var(--sym-yaaru)'};
+  const FRAMES = ['pink','blue','green','yellow'];
+  const FRAME_VAR = {pink:'var(--frame-pink)', blue:'var(--frame-blue)', green:'var(--frame-green)', yellow:'var(--frame-yellow)'};
+  const DIRS = ['N','S','E','W'];
+  const DIR_LETTER = {N:'N', S:'S', E:'E', W:'W'};
+  const DIR_TERM = {N:'ニルポ', S:'サルポ', E:'エルポ', W:'ワルポ'};
+  const DIR_JP = {N:'北', S:'南', E:'東', W:'西'};
+  const ACTION_STEM = {raton:'ラト', foran:'フォラ'};
+  const SEAT_ORDER = ['S','W','N','E'];
+
+  function pipSVG(symbol){
+    const c = SYMBOL_COLOR_VAR[symbol];
+    const common = `class="pip" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"`;
+    switch(symbol){
+      case 'doon': return `<svg ${common}><circle cx="12" cy="12" r="4.2" fill="${c}"/><g stroke="${c}" stroke-width="1.4" stroke-linecap="round"><path d="M12 2V5M12 19V22M2 12H5M19 12H22M4.9 4.9L7 7M17 17L19.1 19.1M19.1 4.9L17 7M7 17L4.9 19.1"/></g></svg>`;
+      case 'hatiron': return `<svg ${common}><path fill="${c}" d="M12 3L22 21H2L12 3Z"/></svg>`;
+      case 'anon': return `<svg ${common}><path fill="none" stroke="${c}" stroke-width="1.6" d="M2 12C7 5 17 5 22 12C17 17 7 17 2 12Z"/><circle fill="${c}" cx="12" cy="12" r="3.4"/></svg>`;
+      case 'yaaru': return `<svg ${common}><circle fill="none" stroke="${c}" stroke-width="1.8" cx="12" cy="7" r="4"/><path stroke="${c}" stroke-width="1.8" stroke-linecap="round" d="M12 11.5V21M6 15H18"/></svg>`;
+    }
+  }
+
+  function rnd(n){ return Math.floor(Math.random()*n); }
+  function shuffle(arr){ const a=arr.slice(); for(let i=a.length-1;i>0;i--){ const j=rnd(i+1); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+  function makeCard(){ return {symbol:SYMBOLS[rnd(4)], frame:FRAMES[rnd(4)], number:1+rnd(5)}; }
+  function total(cards){ return cards.reduce((s,c)=>s+c.number,0); }
+
+  function evaluateScore(hand){
+    const nums = hand.map(c=>c.number).sort((a,b)=>a-b);
+    const straight = (nums[1]-nums[0]===1) && (nums[2]-nums[1]===1);
+    const frameCounts={}; hand.forEach(c=>frameCounts[c.frame]=(frameCounts[c.frame]||0)+1);
+    const maxFrame = Math.max(...Object.values(frameCounts));
+    const numCounts={}; hand.forEach(c=>numCounts[c.number]=(numCounts[c.number]||0)+1);
+    const maxNum = Math.max(...Object.values(numCounts));
+    const symCounts={}; hand.forEach(c=>symCounts[c.symbol]=(symCounts[c.symbol]||0)+1);
+    const maxSym = Math.max(...Object.values(symCounts));
+    let pts=0;
+    if(straight) pts+=1;
+    if(maxFrame>=2) pts += (maxFrame===3?2:1);
+    if(maxNum>=2) pts += (maxNum===3?2:1);
+    if(maxSym>=2) pts += (maxSym===3?2:1);
+    return pts;
+  }
+  function roundScoreFor(seat){ return underworld ? total(seat.hand) : evaluateScore(seat.hand); }
+
+  let audioCtx = null, sfxOn = true;
+  function ensureAudio(){
+    if(!sfxOn) return null;
+    if(!audioCtx){ try{ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return null; } }
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  }
+  function tone(freq, dur, type, vol, delay){
+    const ctx = ensureAudio(); if(!ctx) return;
+    const t0 = ctx.currentTime + (delay||0);
+    const osc = ctx.createOscillator(); const gain = ctx.createGain();
+    osc.type = type||'sine'; osc.frequency.setValueAtTime(freq, t0);
+    gain.gain.setValueAtTime(0, t0);
+    gain.gain.linearRampToValueAtTime(vol||0.12, t0+0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, t0+dur);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(t0); osc.stop(t0+dur+0.02);
+  }
+  const sfx = {
+    click: () => tone(520, .08, 'triangle', .1),
+    declare: () => tone(700, .12, 'sine', .12),
+    swap: () => { tone(340,.09,'square',.08); tone(500,.09,'square',.08,.06); },
+    moolgai: () => { tone(220,.4,'sawtooth',.14); tone(440,.4,'sawtooth',.1,.08); tone(660,.5,'sawtooth',.09,.16); },
+    foul: () => { tone(180,.35,'sawtooth',.16); tone(120,.4,'sawtooth',.14,.12); },
+    win: () => { [523,659,784,1047].forEach((f,i)=>tone(f,.35,'triangle',.11,i*.12)); },
+    lamp: () => { tone(600,.15,'sine',.12); tone(900,.2,'sine',.1,.1); },
+    ashuraHit: () => { tone(880,.15,'square',.12); tone(1180,.2,'square',.1,.1); },
+    ashuraMiss: () => tone(160,.25,'square',.12),
+  };
+
+  /* ============ State & Params ============ */
+  const params = new URLSearchParams(window.location.search);
+  const isOnline = params.get('mode') === 'online';
+  const roomKey = params.get('room') || '';
+  const myName = params.get('name') || 'あなた';
+  const localPlayerCount = Math.max(1, Math.min(4, parseInt(params.get('players'),10) || 1));
+
+  let seats, field, underworld, turnIdx, turnCount, phase, pendingAction, selectedHandIdx, revealDeclarer, matchNo;
+  let skillLock;
+  let moolgaiLock;
+  let hmsQueue = null;
+
+  /* P2P Online State */
+  let mySeatId = 'S';
+  let isHost = false;
+  let peer = null;
+  let hostConn = null;
+  let guestConns = {}; // peerId -> conn
+  let onlineLobbyStarted = false;
+
+  function buildSeatsLocal(){
+    return SEAT_ORDER.map((dir, i) => ({
+      id: dir, dir,
+      isHuman: i < localPlayerCount,
+      name: i < localPlayerCount ? ('プレイヤー'+(i+1)) : ('CPU・'+DIR_JP[dir]),
+      hand: [], lamps: 0, score: 0
+    }));
+  }
+
+  function seatById(id){ return seats.find(s=>s.id===id); }
+  function activeSeat(){ return seats[turnIdx]; }
+  function activeId(){ return seats[turnIdx].id; }
+
+  function newMatchDeal(){
+    seats.forEach(s => { s.hand=[makeCard(),makeCard(),makeCard()]; });
+    field = {N:makeCard(), S:makeCard(), E:makeCard(), W:makeCard()};
+    turnIdx=0; turnCount=1; phase='idle'; pendingAction=null; selectedHandIdx=null; revealDeclarer=null; hmsQueue=null;
+    underworld=false;
+    skillLock={used:false, by:null, type:null};
+    moolgaiLock={usedBy:null};
+  }
+
+  /* Sync P2P game state to all guests */
+  function broadcastState(){
+    if(!isOnline || !isHost) return;
+    const state = {
+      seats, field, underworld, turnIdx, turnCount, phase, pendingAction,
+      skillLock, moolgaiLock, matchNo, revealDeclarer, hmsQueue
+    };
+    Object.values(guestConns).forEach(conn => {
+      if(conn && conn.open) conn.send({type: 'SYNC_STATE', state});
+    });
+  }
+
+  /* Receive P2P Action on Host */
+  function sendHostAction(actionType, payload){
+    if(isOnline && !isHost){
+      if(hostConn && hostConn.open){
+        hostConn.send({type: 'USER_ACTION', actionType, payload, seatId: mySeatId});
+      }
+      return true;
+    }
+    return false;
+  }
+
+  function startSession(){
+    if(!isOnline){
+      seats = buildSeatsLocal();
+      matchNo = 1;
+      newMatchDeal();
+      render();
+    } else {
+      initOnlineLobby();
+    }
+  }
+
+  /* ============ Online P2P PeerJS Setup ============ */
+  function sanitizePeerId(str){ return encodeURIComponent(str).replace(/%/g, '_'); }
+
+  function initOnlineLobby(){
+    const lobbyOverlay = document.getElementById('lobbyOverlay');
+    const lobbyKeyText = document.getElementById('lobbyKeyText');
+    const roomPill = document.getElementById('roomPill');
+    lobbyOverlay.classList.add('show');
+    lobbyKeyText.textContent = '合言葉: ' + roomKey;
+    roomPill.style.display = 'inline-block';
+    roomPill.textContent = '部屋: ' + roomKey;
+
+    const hostPeerId = 'rattel-room-' + sanitizePeerId(roomKey) + '-host';
+    let tempPeer = new Peer();
+
+    document.getElementById('lobbyStatusText').textContent = '部屋を確認中...';
+
+    let hasConnected = false;
+    tempPeer.on('open', () => {
+      let conn = tempPeer.connect(hostPeerId);
+      
+      const timer = setTimeout(() => {
+        if(!hasConnected){
+          // Host does not exist -> Become Host!
+          conn.close();
+          tempPeer.destroy();
+          becomeHost(hostPeerId);
+        }
+      }, 2000);
+
+      conn.on('open', () => {
+        hasConnected = true;
+        clearTimeout(timer);
+        // Connect to existing Host as Guest!
+        isHost = false;
+        peer = tempPeer;
+        hostConn = conn;
+        document.getElementById('lobbyStatusText').textContent = 'ホストに接続しました。参加待機中...';
+        conn.send({type: 'JOIN', name: myName});
+
+        conn.on('data', data => handleClientData(data));
+      });
+    });
+
+    tempPeer.on('error', (err) => {
+      if(!hasConnected){
+        hasConnected = true;
+        tempPeer.destroy();
+        becomeHost(hostPeerId);
+      }
+    });
+  }
+
+  function becomeHost(hostPeerId){
+    isHost = true;
+    mySeatId = 'S';
+    peer = new Peer(hostPeerId);
+
+    seats = SEAT_ORDER.map((dir, i) => ({
+      id: dir, dir,
+      isHuman: i === 0,
+      name: i === 0 ? myName : ('CPU・'+DIR_JP[dir]),
+      hand: [], lamps: 0, score: 0, peerId: i===0?'host':null
+    }));
+
+    peer.on('open', () => {
+      updateLobbyUI();
+      document.getElementById('lobbyStatusText').textContent = 'ホストとして部屋を作成しました。';
+      document.getElementById('lobbyStartBtn').style.display = 'inline-block';
+    });
+
+    peer.on('connection', conn => {
+      conn.on('open', () => {
+        conn.on('data', data => handleHostData(conn, data));
+      });
+      conn.on('close', () => {
+        delete guestConns[conn.peer];
+        seats.forEach(s => { if(s.peerId === conn.peer){ s.isHuman = false; s.name = 'CPU・'+DIR_JP[s.dir]; s.peerId = null; } });
+        updateLobbyUI();
+        broadcastLobbyState();
+      });
+    });
+
+    document.getElementById('lobbyStartBtn').addEventListener('click', () => {
+      sfx.click();
+      onlineLobbyStarted = true;
+      matchNo = 1;
+      newMatchDeal();
+      document.getElementById('lobbyOverlay').classList.remove('show');
+      broadcastLobbyStart();
+      render();
+    });
+  }
+
+  function updateLobbyUI(){
+    const list = document.getElementById('lobbyPlayerList');
+    list.innerHTML = seats.map(s => `
+      <div class="player-item ${s.id==='S'?'host':''}">
+        <span>[席 ${s.dir}] ${s.name}</span>
+        <span>${s.isHuman ? (s.id===mySeatId?'あなた':'プレイヤー') : 'CPU'}</span>
+      </div>
+    `).join('');
+  }
+
+  function broadcastLobbyState(){
+    Object.values(guestConns).forEach(c => {
+      if(c && c.open) c.send({type: 'LOBBY_UPDATE', seats});
+    });
+  }
+
+  function broadcastLobbyStart(){
+    Object.values(guestConns).forEach(c => {
+      if(c && c.open) c.send({type: 'LOBBY_START'});
+    });
+  }
+
+  function handleHostData(conn, data){
+    if(data.type === 'JOIN'){
+      const emptySeat = seats.find(s => !s.isHuman && s.id !== 'S');
+      if(emptySeat){
+        guestConns[conn.peer] = conn;
+        emptySeat.isHuman = true;
+        emptySeat.name = data.name || 'ゲスト';
+        emptySeat.peerId = conn.peer;
+        conn.send({type: 'WELCOME', mySeatId: emptySeat.id, seats});
+        updateLobbyUI();
+        broadcastLobbyState();
+      } else {
+        conn.send({type: 'FULL'});
+      }
+    }
+    else if(data.type === 'USER_ACTION'){
+      executeUserAction(data.actionType, data.payload, data.seatId);
+    }
+  }
+
+  function handleClientData(data){
+    if(data.type === 'WELCOME'){
+      mySeatId = data.mySeatId;
+      seats = data.seats;
+      updateLobbyUI();
+      document.getElementById('lobbyStatusText').textContent = 'ホストの開始を待っています...';
+    }
+    else if(data.type === 'LOBBY_UPDATE'){
+      seats = data.seats;
+      updateLobbyUI();
+    }
+    else if(data.type === 'LOBBY_START'){
+      document.getElementById('lobbyOverlay').classList.remove('show');
+    }
+    else if(data.type === 'SYNC_STATE'){
+      const oldState = {phase, turnIdx};
+      seats = data.state.seats;
+      field = data.state.field;
+      underworld = data.state.underworld;
+      turnIdx = data.state.turnIdx;
+      turnCount = data.state.turnCount;
+      phase = data.state.phase;
+      pendingAction = data.state.pendingAction;
+      skillLock = data.state.skillLock;
+      moolgaiLock = data.state.moolgaiLock;
+      matchNo = data.state.matchNo;
+      revealDeclarer = data.state.revealDeclarer;
+      hmsQueue = data.state.hmsQueue;
+      render();
+    }
+  }
+
+  function executeUserAction(actionType, payload, seatId){
+    if(actionType === 'raton') startRaton();
+    else if(actionType === 'foran') startForan();
+    else if(actionType === 'tapper') startTapper();
+    else if(actionType === 'hamusahamu') startHamusahamu();
+    else if(actionType === 'answerHamusahamu') answerHamusahamu(payload);
+    else if(actionType === 'chooseDirection') chooseDirection(payload);
+    else if(actionType === 'chooseSymbol') chooseSymbol(payload);
+    else if(actionType === 'endTurn') endTurn(seatId, payload.action, payload.isMoolgai);
+    else if(actionType === 'attemptMoolgai') attemptMoolgai();
+    else if(actionType === 'foul') foul(seatId, payload);
+    else if(actionType === 'ashura') handleAshuraAccusation(seatId, payload);
+    broadcastState();
+  }
+
+  /* ============ Chat & Speech ============ */
+  function bubbleAnchorFor(seatId){
+    if(isOnline) return seatId === mySeatId ? document.getElementById('selfArea') : null;
+    return seatId === activeId() ? document.getElementById('selfArea') : null;
+  }
+  function addChatLog(html){
+    const box = document.getElementById('mcChat');
+    const line = document.createElement('div');
+    line.className='mc-line'; line.innerHTML=html;
+    box.appendChild(line);
+    box.scrollTop = box.scrollHeight;
+  }
+  function declare(seatId, text){
+    sfx.declare();
+    const anchor = bubbleAnchorFor(seatId);
+    if(anchor){
+      const b = document.createElement('div');
+      b.className='speech-bubble'; b.textContent=text;
+      anchor.appendChild(b);
+      setTimeout(()=>b.remove(), 2100);
+    }
+    addChatLog(`<b>${seatById(seatId).name}</b>は「${text}」と宣言した。`);
+  }
+  function showMoolgaiFlash(){
+    sfx.moolgai();
+    const f = document.createElement('div');
+    f.className='moolgai-flash';
+    f.innerHTML = `<div class="txt">ムールガイ！</div>`;
+    document.body.appendChild(f);
+    setTimeout(()=>f.remove(), 1700);
+  }
+  function flashFieldSlot(dir){
+    sfx.swap();
+    const slot = document.querySelector('.fs-'+dir+' .card');
+    if(slot){ slot.classList.add('new-swap'); setTimeout(()=>slot.classList.remove('new-swap'), 1100); }
+  }
+
+  /* ============ Render ============ */
+  function cardHTML(card, extraClass){
+    const fv = FRAME_VAR[card.frame];
+    let pips=''; for(let i=0;i<card.number;i++){ pips+=pipSVG(card.symbol); }
+    return `<div class="card ${extraClass||''}" style="--frame:${fv}"><div class="pip-grid">${pips}</div></div>`;
+  }
+
+  function render(){
+    document.body.classList.toggle('underworld', underworld);
+    document.getElementById('modePill').textContent = underworld ? '冥界' : '現世';
+    document.getElementById('matchPill').textContent = '試合 ' + matchNo;
+    document.getElementById('roundInfo').textContent = '試合 ' + matchNo;
+    document.getElementById('skillLampIcon').classList.toggle('off', skillLock.used);
+
+    const fc = document.getElementById('fieldCross');
+    fc.innerHTML = `
+      <div class="field-slot fs-N"><div class="dir-label">${DIR_LETTER.N}</div>${cardHTML(field.N,'')}</div>
+      <div class="field-slot fs-W"><div class="dir-label">${DIR_LETTER.W}</div>${cardHTML(field.W,'')}</div>
+      <div class="field-center-mark"></div>
+      <div class="field-slot fs-E"><div class="dir-label">${DIR_LETTER.E}</div>${cardHTML(field.E,'')}</div>
+      <div class="field-slot fs-S"><div class="dir-label">${DIR_LETTER.S}</div>${cardHTML(field.S,'')}</div>
+    `;
+
+    const displaySelf = isOnline ? seatById(mySeatId) : activeSeat();
+    document.getElementById('selfDir').textContent = displaySelf.dir;
+    document.getElementById('selfName').textContent = displaySelf.name;
+    document.getElementById('lamps-self').innerHTML = lampHTML(displaySelf.lamps);
+
+    const handEl = document.getElementById('handCards');
+    handEl.innerHTML = displaySelf.hand.map((c,i) => {
+      const isMyTurn = isOnline ? (activeId()===mySeatId) : true;
+      const selectable = phase==='select-card' && isMyTurn;
+      const chosen = selectedHandIdx===i;
+      return cardHTML(c, `large ${selectable?'selectable':''} ${chosen?'chosen':''}`).replace('<div class="card', `<div data-idx="${i}" class="card`);
+    }).join('');
+
+    if(phase==='select-card' && (isOnline ? activeId()===mySeatId : true)){
+      handEl.querySelectorAll('.card').forEach(el => {
+        el.addEventListener('click', () => { sfx.click(); selectedHandIdx=parseInt(el.dataset.idx,10); phase='choose-direction'; setMessage('ラトン → カード選択'); render(); });
+      });
+      document.getElementById('handHint').textContent = '交換したいカードをタップ（選択せず方向を指すことも可）';
+    } else {
+      document.getElementById('handHint').textContent = '';
+    }
+
+    const others = seats.filter(s => s.id !== displaySelf.id);
+    others.forEach((s, i) => {
+      const box = document.getElementById('seat-slot'+i);
+      box.classList.toggle('active-turn', s.id === activeId());
+      box.innerHTML = `
+        <div class="seat-dir">${s.dir}</div>
+        <div class="seat-name">${s.name}</div>
+        <div class="seat-backs">${s.hand.map(()=>`<div class="card-back"></div>`).join('')}</div>
+        <div class="lamps">${lampHTML(s.lamps)}</div>
+      `;
+    });
+
+    renderCommandPanel();
+  }
+
+  function lampHTML(lit){ let h=''; for(let i=0;i<2;i++){ h+=`<div class="lamp ${i<lit?'lit':''}"></div>`; } return h; }
+  function setMessage(msg){ document.getElementById('messageLine').textContent = msg; }
+  function moolgaiAllowedFor(seatId){ return moolgaiLock.usedBy===null || moolgaiLock.usedBy===seatId; }
+
+  /* ============ Command Panel ============ */
+  function renderCommandPanel(){
+    const panel = document.getElementById('commandPanel');
+    panel.innerHTML = '';
+
+    const isMyTurn = isOnline ? (activeId()===mySeatId) : true;
+
+    if(phase==='choose-number'){
+      const activeHmsSeat = hmsQueue ? hmsQueue.seatId : activeId();
+      if(!isOnline || activeHmsSeat === mySeatId){
+        for(let n=1;n<=5;n++){ addBtn(panel, String(n), () => { if(sendHostAction('answerHamusahamu', n)) return; answerHamusahamu(n); }); }
+      } else {
+        addBtn(panel, `（${seatById(activeHmsSeat).name} の回答待ち）`, ()=>{}, true);
+      }
+      return;
+    }
+
+    if(!activeSeat().isHuman || !isMyTurn){
+      addBtn(panel, `（${activeSeat().name} の手番）`, ()=>{}, true);
+      return;
+    }
+
+    if(phase==='idle'){
+      addBtn(panel, 'ラトン', ()=> { if(sendHostAction('raton')) return; startRaton(); });
+      addBtn(panel, 'フォラン', ()=> { if(sendHostAction('foran')) return; startForan(); });
+      addBtn(panel, 'タッパー', ()=> { if(sendHostAction('tapper')) return; startTapper(); });
+      addBtn(panel, 'ハムサハム', ()=> { if(sendHostAction('hamusahamu')) return; startHamusahamu(); });
+      addBtn(panel, 'ムー', ()=>{ sfx.click(); if(sendHostAction('endTurn', {action:'none', isMoolgai:false})) return; endTurn(activeId(),'none',false); });
+      addBtn(panel, 'ムールガイ', ()=>{ sfx.click(); if(sendHostAction('attemptMoolgai')) return; attemptMoolgai(); });
+    }
+    else if(phase==='select-card'){
+      addBtn(panel, '選ばない（場が変わる）', () => { sfx.click(); selectedHandIdx=null; phase='choose-direction'; setMessage('ラトン → 選ばない'); render(); });
+    }
+    else if(phase==='choose-direction'){
+      DIRS.forEach(d => addBtn(panel, DIR_TERM[d], () => { if(sendHostAction('chooseDirection', d)) return; chooseDirection(d); }));
+    }
+    else if(phase==='choose-symbol'){
+      SYMBOLS.forEach(s => addBtn(panel, SYMBOL_LABEL[s], () => { if(sendHostAction('chooseSymbol', s)) return; chooseSymbol(s); }));
+    }
+    else if(phase==='end-choice'){
+      renderEndTrap(panel);
+    }
+  }
+
+  function addBtn(panel, label, handler, disabled){
+    const btn = document.createElement('button');
+    btn.className='cmd-btn'; btn.textContent=label; btn.disabled=!!disabled;
+    if(!disabled) btn.addEventListener('click', handler);
+    panel.appendChild(btn);
+  }
+
+  function attemptMoolgai(){
+    if(turnCount < 2){ foul(activeId(), 'ムールガイ（初手は不可）'); return; }
+    if(!moolgaiAllowedFor(activeId())){ foul(activeId(), 'ムールガイ（権利なし）'); return; }
+    endTurn(activeId(), 'none', true);
+  }
+
+  function renderEndTrap(panel){
+    const stem = ACTION_STEM[pendingAction];
+    const moolgaiOK = turnCount>=2 && moolgaiAllowedFor(activeId());
+    const correct = [stem+'ムー'];
+    if(moolgaiOK) correct.push(stem+'ムールガイ');
+    const otherStem = pendingAction==='raton' ? ACTION_STEM.foran : ACTION_STEM.raton;
+    const decoys = new Set([otherStem+'ムー', 'ムー']);
+    if(!moolgaiOK && moolgaiAllowedFor(activeId())) decoys.add(stem+'ムールガイ');
+    const options = shuffle([...correct, ...decoys]);
+    options.forEach(label => {
+      addBtn(panel, label, () => {
+        sfx.click();
+        const isMool = label.endsWith('ムールガイ');
+        if(correct.includes(label)){
+          if(sendHostAction('endTurn', {action: pendingAction, isMoolgai: isMool})) return;
+          endTurn(activeId(), pendingAction, isMool);
+        } else {
+          if(sendHostAction('foul', label)) return;
+          foul(activeId(), label);
+        }
+      });
+    });
+  }
+
+  /* ============ Player Actions ============ */
+  function startRaton(){ sfx.click(); pendingAction='raton'; phase='select-card'; setMessage('ラトン'); declare(activeId(),'ラトン！'); render(); }
+  function startForan(){ sfx.click(); pendingAction='foran'; underworld=!underworld; phase='end-choice'; setMessage('フォラン'); declare(activeId(),'フォラン！'); render(); }
+
+  function startTapper(){
+    sfx.click();
+    if(skillLock.used){ foul(activeId(), 'タッパー（権利なし）'); return; }
+    skillLock = {used:true, by:activeId(), type:'tapper'};
+    pendingAction='tapper'; phase='choose-symbol'; setMessage('タッパー'); declare(activeId(),'タッパー！'); render();
+  }
+
+  function startHamusahamu(){
+    sfx.click();
+    if(skillLock.used){ foul(activeId(), 'ハムサハム（権利なし）'); return; }
+    skillLock = {used:true, by:activeId(), type:'hamusahamu'};
+    setMessage('ハムサハム');
+    declare(activeId(),'ハムサハム！');
+    const startIdx = SEAT_ORDER.indexOf(activeId());
+    const order = []; for(let i=0;i<SEAT_ORDER.length;i++){ order.push(SEAT_ORDER[(startIdx+i)%SEAT_ORDER.length]); }
+    runHamusahamuSequence(order, 0);
+  }
+
+  function runHamusahamuSequence(order, idx, onComplete){
+    if(idx >= order.length){ phase='idle'; pendingAction=null; hmsQueue=null; render(); if(isHost) broadcastState(); if(onComplete) onComplete(); return; }
+    const id = order[idx];
+    const s = seatById(id);
+    if(s.isHuman){
+      hmsQueue = {order, idx, onComplete, seatId:id};
+      phase = 'choose-number';
+      render();
+      if(isHost) broadcastState();
+    } else {
+      setTimeout(() => {
+        const high = Math.max(...s.hand.map(c=>c.number));
+        declare(id, 'ハムサハム' + high);
+        render();
+        if(isHost) broadcastState();
+        setTimeout(() => runHamusahamuSequence(order, idx+1, onComplete), 1300);
+      }, 1300);
+    }
+  }
+
+  function answerHamusahamu(n){
+    const q = hmsQueue;
+    const self = seatById(q.seatId);
+    const actualMax = Math.max(...self.hand.map(c=>c.number));
+    if(n !== actualMax){ foul(q.seatId, 'ハムサハム' + n + '（誤申告）'); return; }
+    declare(q.seatId, 'ハムサハム' + n);
+    hmsQueue = null;
+    render();
+    if(isHost) broadcastState();
+    setTimeout(() => runHamusahamuSequence(q.order, q.idx+1, q.onComplete), 900);
+  }
+
+  function chooseDirection(dir){
+    sfx.click();
+    const active = activeSeat();
+    if(selectedHandIdx!==null){
+      const tmp = active.hand[selectedHandIdx];
+      active.hand[selectedHandIdx] = field[dir];
+      field[dir] = tmp;
+    } else {
+      field[dir] = makeCard();
+    }
+    phase='end-choice';
+    setMessage('ラトン → ' + DIR_TERM[dir]);
+    render();
+    flashFieldSlot(dir);
+    selectedHandIdx=null;
+    if(isHost) broadcastState();
+  }
+
+  function chooseSymbol(sym){
+    sfx.click();
+    seats.forEach(s => { const idx=s.hand.findIndex(c=>c.symbol===sym); if(idx>=0) s.hand[idx]=makeCard(); });
+    setMessage('タッパー → ' + SYMBOL_LABEL[sym]);
+    phase='idle'; pendingAction=null;
+    render();
+    if(isHost) broadcastState();
+  }
+
+  function foul(seatId, wrongLabel){
+    sfx.foul();
+    const seat = seatById(seatId);
+    addChatLog(`<b>${seat.name}</b>が「${wrongLabel}」と誤って宣言し、指摘された。`);
+    showEndOverlay('指摘されました', null, `${seat.name}が「${wrongLabel}」と誤った宣言をした。ルール違反のため、この試合は終了する（ペナルティなし）。`, null, false);
+    if(isHost) broadcastState();
+  }
+
+  function endTurn(seatId, action, isMoolgai){
+    const stem = ACTION_STEM[action] || '';
+    const label = stem + (isMoolgai ? 'ムールガイ' : 'ムー');
+    declare(seatId, label);
+    if(isMoolgai){
+      moolgaiLock = {usedBy:seatId};
+      revealDeclarer = seatId;
+      showMoolgaiFlash();
+    }
+    phase='idle'; pendingAction=null; selectedHandIdx=null;
+    advanceTurn();
+  }
+
+  function advanceTurn(){
+    turnIdx = (turnIdx+1) % seats.length;
+    if(turnIdx===0) turnCount++;
+    if(revealDeclarer && activeId()===revealDeclarer){ doReveal(); return; }
+    
+    if(isHost) broadcastState();
+
+    if(!isOnline){
+      maybeShowPassScreen(() => {
+        render();
+        if(!activeSeat().isHuman) setTimeout(cpuTurn, 1500);
+      });
+    } else {
+      render();
+      if(isHost && !activeSeat().isHuman) setTimeout(cpuTurn, 1500);
+    }
+  }
+
+  function maybeShowPassScreen(cont){
+    if(localPlayerCount <= 1 || !activeSeat().isHuman){ cont(); return; }
+    const po = document.getElementById('passOverlay');
+    document.getElementById('passWho').textContent = activeSeat().name + ' の番';
+    po.classList.add('show');
+    const btn = document.getElementById('passBtn');
+    const clone = btn.cloneNode(true);
+    btn.parentNode.replaceChild(clone, btn);
+    clone.addEventListener('click', () => { sfx.click(); po.classList.remove('show'); cont(); });
+  }
+
+  function cpuTurn(){
+    if(!isHost && isOnline) return;
+    const id = activeId();
+    const cpu = activeSeat();
+    let didExtra = false;
+
+    if(!skillLock.used && Math.random()<0.18){
+      if(Math.random()<0.5){
+        skillLock = {used:true, by:id, type:'tapper'};
+        const sym = SYMBOLS[rnd(4)];
+        setTimeout(() => {
+          seats.forEach(s => { const idx=s.hand.findIndex(c=>c.symbol===sym); if(idx>=0) s.hand[idx]=makeCard(); });
+          declare(id, 'タッパー→'+SYMBOL_LABEL[sym]);
+          render();
+          if(isHost) broadcastState();
+        }, 1300);
+        didExtra = true;
+      } else {
+        skillLock = {used:true, by:id, type:'hamusahamu'};
+        const startIdx = SEAT_ORDER.indexOf(id);
+        const order = []; for(let i=0;i<SEAT_ORDER.length;i++){ order.push(SEAT_ORDER[(startIdx+i)%SEAT_ORDER.length]); }
+        setTimeout(() => {
+          runHamusahamuSequence(order, 0, () => {
+            turnIdx = seats.findIndex(x=>x.id===id);
+            declare(id, 'ムー');
+            render();
+            if(isHost) broadcastState();
+            setTimeout(() => advanceTurn(), 1200);
+          });
+        }, 1300);
+        return;
+      }
+    }
+
+    const finish = () => {
+      const roll = Math.random();
+      const canMoolgai = turnCount>=2 && moolgaiAllowedFor(id) && Math.random()<0.15;
+      if(roll<0.55){
+        const dir = DIRS[rnd(4)];
+        const hasCard = Math.random()<0.85;
+        if(hasCard){
+          const hIdx = rnd(cpu.hand.length);
+          const tmp = cpu.hand[hIdx]; cpu.hand[hIdx]=field[dir]; field[dir]=tmp;
+        } else { field[dir] = makeCard(); }
+        declare(id, 'ラトン→'+DIR_TERM[dir]);
+        render(); flashFieldSlot(dir);
+        setTimeout(()=>{
+          const label = ACTION_STEM.raton + (canMoolgai?'ムールガイ':'ムー');
+          declare(id, label);
+          if(canMoolgai){ moolgaiLock={usedBy:id}; revealDeclarer=id; showMoolgaiFlash(); }
+          render();
+          setTimeout(() => advanceTurn(), 1600);
+        }, 1300);
+      } else if(roll<0.75){
+        underworld = !underworld;
+        declare(id, 'フォラン');
+        render();
+        setTimeout(()=>{
+          const label = ACTION_STEM.foran + (canMoolgai?'ムールガイ':'ムー');
+          declare(id, label);
+          if(canMoolgai){ moolgaiLock={usedBy:id}; revealDeclarer=id; showMoolgaiFlash(); }
+          render();
+          setTimeout(() => advanceTurn(), 1600);
+        }, 1300);
+      } else {
+        const label = canMoolgai ? 'ムールガイ' : 'ムー';
+        declare(id, label);
+        if(canMoolgai){ moolgaiLock={usedBy:id}; revealDeclarer=id; showMoolgaiFlash(); }
+        render();
+        setTimeout(() => advanceTurn(), 1600);
+      }
+    };
+
+    render();
+    setTimeout(finish, didExtra ? 2200 : 300);
+  }
+
+  /* ============ Reveal & Match End ============ */
+  function revealGridHTML(scored, winnerSeatOrNull){
+    return `<div class="reveal-grid">` + scored.map(x => `
+      <div class="reveal-seat ${winnerSeatOrNull && x.seat===winnerSeatOrNull?'winner':''}" data-seat="${x.seat.id}">
+        <div class="rs-name">${x.seat.name}</div>
+        <div class="rs-hand">${x.seat.hand.map(c=>cardHTML(c,'small')).join('')}</div>
+        <div class="rs-score">${x.pts}pt</div>
+      </div>`).join('') + `</div>`;
+  }
+
+  function doReveal(){
+    const scored = seats.map(s => ({seat:s, pts: roundScoreFor(s)}));
+    const maxPts = Math.max(...scored.map(x=>x.pts));
+    const winners = scored.filter(x=>x.pts===maxPts);
+    const winner = winners[rnd(winners.length)].seat;
+    winner.lamps = Math.min(2, winner.lamps+1);
+    sfx.lamp();
+    addChatLog(`試合${matchNo}: <b>${winner.name}</b>が優勝（${maxPts}pt）。`);
+
+    const html = revealGridHTML(scored, winner);
+    const sessionOver = winner.lamps >= 2;
+    if(sessionOver && winner.isHuman){ winner.score += 1; }
+
+    const title = sessionOver ? (winner.isHuman ? `${winner.name} WINNER` : '勝負決着') : `試合${matchNo}結果`;
+    const body = sessionOver
+      ? `${winner.name}が銅の電球を2個点灯させ、WINNERとなった。（この試合の得点：${maxPts}）`
+      : `${winner.name}が優勝（${maxPts}pt）。ランプが1個点灯した。`;
+
+    showEndOverlay(title, html, body, scored, sessionOver);
+    if(isHost) broadcastState();
+  }
+
+  function handleAshuraAccusation(accuserSeatId, targetSeatId){
+    const targetSeat = seatById(targetSeatId);
+    const hit = total(targetSeat.hand) === 10;
+    const fb = document.getElementById('ashuraFeedback');
+    if(hit){
+      seatById(accuserSeatId).score += 1;
+      sfx.ashuraHit();
+      fb.textContent = `アシュラってる！ → ${targetSeat.name}を的中（+1）`;
+      addChatLog(`<b>${seatById(accuserSeatId).name}</b>「アシュラってる！」→ ${targetSeat.name}的中（+1）`);
+    } else {
+      sfx.ashuraMiss();
+      fb.textContent = `アシュラってる！ → ${targetSeat.name}は空振り`;
+      addChatLog(`<b>${seatById(accuserSeatId).name}</b>「アシュラってる！」→ ${targetSeat.name}空振り`);
+    }
+    if(isHost) broadcastState();
+  }
+
+  function showEndOverlay(title, revealHTML, body, scored, sessionOver){
+    document.getElementById('overlayTitle').textContent = title;
+    document.getElementById('overlayReveal').innerHTML = revealHTML || '';
+    document.getElementById('overlayBody').textContent = body;
+
+    const ashuraArea = document.getElementById('ashuraArea');
+    ashuraArea.innerHTML = '<div class="ashura-feedback" id="ashuraFeedback"></div>';
+
+    if(scored){
+      const startBtn = document.createElement('button');
+      startBtn.className = 'ashura';
+      startBtn.textContent = 'アシュラってる！';
+      startBtn.addEventListener('click', () => {
+        sfx.click();
+        const picker = document.createElement('div');
+        picker.className = 'ashura-picker';
+        const others = scored.filter(x => x.seat.id !== mySeatId);
+        picker.innerHTML = '<div style="font-size:12px;color:var(--gold-bright);width:100%;">誰が？</div>';
+        others.forEach(x => {
+          const b = document.createElement('button');
+          b.className = 'ashura';
+          b.textContent = x.seat.name;
+          b.addEventListener('click', () => {
+            picker.querySelectorAll('button').forEach(bb => bb.disabled = true);
+            if(sendHostAction('ashura', x.seat.id)) return;
+            handleAshuraAccusation(mySeatId, x.seat.id);
+          });
+          picker.appendChild(b);
+        });
+        startBtn.replaceWith(picker);
+      });
+      ashuraArea.insertBefore(startBtn, ashuraArea.firstChild);
+    }
+
+    const btnRow = document.getElementById('overlayBtnRow');
+    btnRow.innerHTML = '';
+    
+    if(!isOnline || isHost){
+      if(sessionOver){
+        sfx.win();
+        const again = document.createElement('button');
+        again.textContent = 'もう一度';
+        again.addEventListener('click', () => {
+          sfx.click();
+          document.getElementById('overlay').classList.remove('show');
+          seats.forEach(s => { s.lamps=0; s.score=0; });
+          matchNo = 1;
+          newMatchDeal();
+          render();
+          if(isHost) broadcastState();
+        });
+        btnRow.appendChild(again);
+      } else {
+        const next = document.createElement('button');
+        next.textContent = '次の試合へ';
+        next.addEventListener('click', () => {
+          sfx.click();
+          document.getElementById('overlay').classList.remove('show');
+          matchNo++;
+          newMatchDeal();
+          render();
+          if(isHost) broadcastState();
+        });
+        btnRow.appendChild(next);
+      }
+    } else {
+      btnRow.innerHTML = '<span style="font-size:11px; color:var(--papyrus-dim);">ホストの操作を待っています...</span>';
+    }
+
+    document.getElementById('overlay').classList.add('show');
+    render();
+  }
+
+  function initGlyphStrip(){
+    const icons = [
+      `<svg viewBox="0 0 24 24" fill="none"><circle class="g-line" cx="12" cy="6" r="3.4" stroke-width="1.4"/><path class="g-line" d="M12 9.4V21M6.5 13H17.5" stroke-width="1.4" stroke-linecap="round"/></svg>`,
+      `<svg viewBox="0 0 24 24" fill="none"><path class="g-line" d="M2 12C6 7 18 7 22 12C18 15 6 15 2 12Z" stroke-width="1.3"/><circle class="g-line" cx="12" cy="12" r="2.2" stroke-width="1.3"/><path class="g-line" d="M12 14.2V19M12 19L9.5 21.5M15 8L18 6" stroke-width="1.3" stroke-linecap="round"/></svg>`,
+      `<svg viewBox="0 0 24 24" fill="none"><circle class="g-line" cx="12" cy="12" r="4.5" stroke-width="1.3"/><path class="g-line" d="M12 2V4.5M12 19.5V22M2 12H4.5M19.5 12H22M4.9 4.9L6.6 6.6M17.4 17.4L19.1 19.1M19.1 4.9L17.4 6.6M6.6 17.4L4.9 19.1" stroke-width="1.3" stroke-linecap="round"/></svg>`,
+      `<svg viewBox="0 0 24 24" fill="none"><path class="g-line" d="M12 4L21 20H3L12 4Z" stroke-width="1.3" stroke-linejoin="round"/><path class="g-line" d="M8.3 14H15.7" stroke-width="1"/></svg>`
+    ];
+    let html=''; for(let i=0;i<22;i++){ html+=icons[i%icons.length]; }
+    document.getElementById('glyphStrip').innerHTML = html;
+  }
+
+  function initSfxToggle(){
+    const btn = document.getElementById('sfxToggle');
+    btn.addEventListener('click', () => {
+      sfxOn = !sfxOn;
+      btn.textContent = '♪ 音: ' + (sfxOn ? 'ON' : 'OFF');
+      if(sfxOn) ensureAudio();
+    });
+  }
+
+  initGlyphStrip();
+  initSfxToggle();
+  startSession();
+
+})();
+</script>
+</body>
+</html>
