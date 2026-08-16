@@ -123,6 +123,25 @@
     outline:2px solid var(--turq);
     outline-offset:4px;
   }
+  .glossary-link{
+    display:block;
+    width:max-content;
+    margin:16px auto 0;
+    padding:10px 28px;
+    font-family:'Cinzel',serif;
+    font-size:14px;
+    color:var(--gold-bright);
+    background:transparent;
+    border:1px solid var(--gold);
+    border-radius:4px;
+    text-decoration:none;
+    transition:background .15s ease, transform .15s ease;
+  }
+  .glossary-link:hover{
+    background:rgba(201,162,75,.12);
+    transform:translateY(-2px);
+  }
+
   .cta .arrow{transition:transform .15s ease;}
   .cta:hover .arrow{transform:translateX(4px);}
 
@@ -179,12 +198,6 @@
   }
   .term.direction .word{color:var(--gold-bright);}
 
-  .glossary-open{display:block;margin:16px auto 0;padding:10px 28px;font-family:'Cinzel',serif;font-size:14px;color:var(--gold-bright);background:transparent;border:1px solid var(--gold);border-radius:4px;cursor:pointer;}
-  .glossary-modal{position:fixed;inset:0;z-index:1000;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.82);}
-  .glossary-modal.open{display:flex;}
-  .glossary-modal .glossary{display:block;width:min(880px,100%);max-height:88vh;overflow-y:auto;margin:0;padding:28px 24px 24px;background:var(--void);border:1px solid var(--gold);border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,.7);}
-  .glossary-close{display:block;margin:20px auto 0;padding:10px 28px;font-family:'Cinzel',serif;font-size:13px;color:var(--void);background:linear-gradient(180deg,var(--gold-bright),var(--gold));border:1px solid #8a6a2e;border-radius:4px;cursor:pointer;}
-
   footer{
     padding:30px 24px 50px;
     font-family:'Space Mono', monospace;
@@ -222,73 +235,8 @@
       冒険を始める
       <span class="arrow">→</span>
     </a>
-    <button class="glossary-open" id="glossaryOpen" type="button">用語集を見る</button>
+    <a class="glossary-link" href="glossary.html">用語集を見る</a>
   </div>
-
-  <div class="glossary-modal" id="glossaryModal">
-    <div class="glossary">
-      <div class="glossary-head">
-      <h2 id="glossaryTitle">用語集 — GLOSSARY</h2>
-      <div class="rule"></div>
-    </div>
-    <div class="term-grid">
-      <div class="term">
-        <div class="word">ラトン <span class="kana">RATON</span></div>
-        <div class="desc">手札を1枚選んで交換対象にする宣言（選ばなければ場のカードがランダムに変わる）。この後、方角を宣言する。</div>
-      </div>
-      <div class="term">
-        <div class="word">ムー <span class="kana">MU</span></div>
-        <div class="desc">単独で使うと自分の手番を飛ばす。ラトン・フォランの後につけると手番の終了宣言になる。</div>
-      </div>
-      <div class="term">
-        <div class="word">フォラン <span class="kana">FORAN</span></div>
-        <div class="desc">場を現世と冥界に入れ替える宣言。1ラウンドに何度でも使える。宣言したら必ず「フォラムー」で締める。</div>
-      </div>
-      <div class="term">
-        <div class="word">タッパー <span class="kana">TAPPER</span></div>
-        <div class="desc">全員の指定した絵柄のカードをランダムなカードに変える。1ラウンドに1回だけ使える。</div>
-      </div>
-      <div class="term">
-        <div class="word">ハムサハム <span class="kana">HAMSA HAM</span></div>
-        <div class="desc">自分から時計回りに、全員が手札の中で一番大きい数字を申告する。嘘は禁止。1ラウンドに1回だけ使える。</div>
-      </div>
-      <div class="term direction">
-        <div class="word">South <span class="kana">サルポ</span></div>
-        <div class="desc">場のカードのうち、南に置かれたカードを指す方角。</div>
-      </div>
-      <div class="term direction">
-        <div class="word">East <span class="kana">エルポ</span></div>
-        <div class="desc">場のカードのうち、東に置かれたカードを指す方角。</div>
-      </div>
-      <div class="term direction">
-        <div class="word">North <span class="kana">ニルポ</span></div>
-        <div class="desc">場のカードのうち、北に置かれたカードを指す方角。</div>
-      </div>
-      <div class="term direction">
-        <div class="word">West <span class="kana">ワルポ</span></div>
-        <div class="desc">場のカードのうち、西に置かれたカードを指す方角。</div>
-      </div>
-      <div class="term">
-        <div class="word">ラトムー <span class="kana">RATOMU</span></div>
-        <div class="desc">ラトンの後に宣言できる唯一の正しい終了宣言。それ以外を宣言すると指摘され、ゲームが終了する。</div>
-      </div>
-      <div class="term">
-        <div class="word">ラトムールガイ <span class="kana">RATOMUURUGAI</span></div>
-        <div class="desc">交換を終えると同時に、次の自分の番の開始時に全員の手札を公開して勝負する宣言（2手番目以降のみ）。</div>
-      </div>
-      <div class="term">
-        <div class="word">アシュラってる！ <span class="kana">ASHURATTERU</span></div>
-        <div class="desc">相手の手札の合計が「10」になった瞬間を指摘する常駐ボタン。的中で得点。</div>
-      </div>
-      <div class="term">
-        <div class="word">絵柄 <span class="kana">ハティロン・アノン・ドーン・ヤール</span></div>
-        <div class="desc">4種の絵柄。それぞれ固有の色を持つ（黄・紫・赤・青）。カードの枠色（桃・青・緑・黄）は別の属性。</div>
-      </div>
-      </div>
-      <button class="glossary-close" id="glossaryClose" type="button">閉じる</button>
-    </div>
-  </div>
-
   <footer>RATTEL // A HAND-EXCHANGE RITE FOR THE LIVING AND THE DEAD</footer>
 
 <script>

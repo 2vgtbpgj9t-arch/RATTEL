@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RATTEL — 用語集</title>
+<style>
+
+  :root{
+    --void:#0e0b08;
+    --panel:#1b140d;
+    --panel-line:#3a2c1a;
+    --gold:#c9a24b;
+    --gold-bright:#e8c874;
+    --turq:#3e9c93;
+    --turq-dim:#245a54;
+    --oxide:#a23b2e;
+    --papyrus:#ead9b4;
+    --papyrus-dim:#a9926a;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(ellipse at 50% -10%, #241a10 0%, var(--void) 55%),
+      var(--void);
+    color:var(--papyrus);
+    font-family:'EB Garamond', serif;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    overflow-x:hidden;
+  }
+
+  /* hieroglyph border strip */
+  .glyph-strip{
+    width:100%;
+    height:34px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:28px;
+    background:linear-gradient(180deg, #241a10, transparent);
+    border-bottom:1px solid var(--panel-line);
+    overflow:hidden;
+  }
+  .glyph-strip svg{width:18px;height:18px;opacity:.55;flex:none;}
+  .glyph-strip svg .g-line{stroke:var(--gold);}
+
+  .hero{
+    max-width:760px;
+    width:100%;
+    padding:64px 24px 40px;
+    text-align:center;
+    position:relative;
+  }
+
+  .eyebrow{
+    font-family:'Space Mono', monospace;
+    letter-spacing:.35em;
+    text-transform:uppercase;
+    font-size:12px;
+    color:var(--turq);
+    margin-bottom:18px;
+  }
+
+  h1.title{
+    font-family:'Cinzel', serif;
+    font-weight:700;
+    font-size:clamp(44px, 9vw, 84px);
+    margin:0;
+    letter-spacing:.03em;
+    color:var(--gold-bright);
+    text-shadow:0 0 40px rgba(201,162,75,.25);
+    line-height:1.05;
+  }
+  .title small{
+    display:block;
+    font-family:'EB Garamond', serif;
+    font-style:italic;
+    font-weight:400;
+    font-size:20px;
+    color:var(--papyrus-dim);
+    letter-spacing:.08em;
+    margin-top:10px;
+  }
+
+  .lede{
+    margin:28px auto 0;
+    max-width:520px;
+    font-size:19px;
+    line-height:1.9;
+    color:var(--papyrus);
+  }
+
+  .cta{
+    margin-top:40px;
+    display:inline-flex;
+    align-items:center;
+    gap:12px;
+    padding:16px 40px;
+    font-family:'Cinzel', serif;
+    font-weight:500;
+    font-size:17px;
+    letter-spacing:.08em;
+    color:var(--void);
+    background:linear-gradient(180deg, var(--gold-bright), var(--gold));
+    border:1px solid #8a6a2e;
+    border-radius:2px;
+    text-decoration:none;
+    cursor:pointer;
+    position:relative;
+    transition:transform .15s ease, box-shadow .15s ease;
+    box-shadow:0 0 0 rgba(201,162,75,0);
+  }
+  .cta:hover{
+    transform:translateY(-2px);
+    box-shadow:0 8px 30px rgba(201,162,75,.35);
+  }
+  .cta:focus-visible{
+    outline:2px solid var(--turq);
+    outline-offset:4px;
+  }
+  .cta .arrow{transition:transform .15s ease;}
+  .cta:hover .arrow{transform:translateX(4px);}
+
+  /* glossary */
+  .glossary{
+    width:100%;
+    max-width:880px;
+    margin:56px 0 80px;
+    padding:0 24px;
+  }
+  .glossary-head{
+    display:flex;
+    align-items:baseline;
+    gap:16px;
+    margin-bottom:22px;
+  }
+  .glossary-head h2{
+    font-family:'Cinzel', serif;
+    font-size:22px;
+    color:var(--gold);
+    letter-spacing:.06em;
+    margin:0;
+    white-space:nowrap;
+  }
+  .glossary-head .rule{
+    height:1px;
+    width:100%;
+    background:linear-gradient(90deg, var(--panel-line), transparent);
+  }
+
+  .term-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));
+    gap:1px;
+    background:var(--panel-line);
+    border:1px solid var(--panel-line);
+  }
+  .term{
+    background:var(--panel);
+    padding:18px 20px;
+  }
+  .term .word{
+    font-family:'Space Mono', monospace;
+    color:var(--turq);
+    font-size:15px;
+    letter-spacing:.02em;
+    margin-bottom:6px;
+  }
+  .term .word .kana{color:var(--gold-bright);}
+  .term .desc{
+    font-size:15px;
+    line-height:1.6;
+    color:var(--papyrus-dim);
+  }
+  .term.direction .word{color:var(--gold-bright);}
+
+  footer{
+    padding:30px 24px 50px;
+    font-family:'Space Mono', monospace;
+    font-size:11px;
+    letter-spacing:.15em;
+    color:#5a4a30;
+    text-transform:uppercase;
+  }
+
+  @media (prefers-reduced-motion: no-preference){
+    .title{animation:rise .9s ease both;}
+    .lede{animation:rise .9s .1s ease both;}
+    .cta{animation:rise .9s .2s ease both;}
+    @keyframes rise{
+      from{opacity:0; transform:translateY(14px);}
+      to{opacity:1; transform:translateY(0);}
+    }
+  }
+
+
+/* Glossary page */
+body {
+  min-height:100vh;
+  overflow-x:hidden;
+}
+
+.glossary-page {
+  width:100%;
+  max-width:880px;
+  margin:0 auto;
+  padding:70px 24px 60px;
+}
+
+.glossary-page .glossary {
+  display:block;
+  width:100%;
+  margin:0;
+  padding:0;
+}
+
+.glossary-back {
+  display:block;
+  width:max-content;
+  margin:34px auto 0;
+  padding:10px 28px;
+  font-family:'Cinzel',serif;
+  font-size:14px;
+  color:var(--gold-bright);
+  background:transparent;
+  border:1px solid var(--gold);
+  border-radius:4px;
+  text-decoration:none;
+  transition:background .15s ease, transform .15s ease;
+}
+
+.glossary-back:hover {
+  background:rgba(201,162,75,.12);
+  transform:translateY(-2px);
+}
+
+@media (max-width:600px) {
+  .glossary-page {
+    padding:40px 16px 40px;
+  }
+}
+</style>
+</head>
+
+<body>
+<div class="glyph-bg" aria-hidden="true"></div>
+
+<main class="glossary-page">
+<div class="glossary">
+    <div class="glossary-head">
+      <h2>用語集 — GLOSSARY</h2>
+      <div class="rule"></div>
+    </div>
+    <div class="term-grid">
+      <div class="term">
+        <div class="word">ラトン <span class="kana">RATON</span></div>
+        <div class="desc">手札を1枚選んで交換対象にする宣言（選ばなければ場のカードがランダムに変わる）。この後、方角を宣言する。</div>
+      </div>
+      <div class="term">
+        <div class="word">ムー <span class="kana">MU</span></div>
+        <div class="desc">単独で使うと自分の手番を飛ばす。ラトン・フォランの後につけると手番の終了宣言になる。</div>
+      </div>
+      <div class="term">
+        <div class="word">フォラン <span class="kana">FORAN</span></div>
+        <div class="desc">場を現世と冥界に入れ替える宣言。1ラウンドに何度でも使える。宣言したら必ず「フォラムー」で締める。</div>
+      </div>
+      <div class="term">
+        <div class="word">タッパー <span class="kana">TAPPER</span></div>
+        <div class="desc">全員の指定した絵柄のカードをランダムなカードに変える。1ラウンドに1回だけ使える。</div>
+      </div>
+      <div class="term">
+        <div class="word">ハムサハム <span class="kana">HAMSA HAM</span></div>
+        <div class="desc">自分から時計回りに、全員が手札の中で一番大きい数字を申告する。嘘は禁止。1ラウンドに1回だけ使える。</div>
+      </div>
+      <div class="term direction">
+        <div class="word">South <span class="kana">サルポ</span></div>
+        <div class="desc">場のカードのうち、南に置かれたカードを指す方角。</div>
+      </div>
+      <div class="term direction">
+        <div class="word">East <span class="kana">エルポ</span></div>
+        <div class="desc">場のカードのうち、東に置かれたカードを指す方角。</div>
+      </div>
+      <div class="term direction">
+        <div class="word">North <span class="kana">ニルポ</span></div>
+        <div class="desc">場のカードのうち、北に置かれたカードを指す方角。</div>
+      </div>
+      <div class="term direction">
+        <div class="word">West <span class="kana">ワルポ</span></div>
+        <div class="desc">場のカードのうち、西に置かれたカードを指す方角。</div>
+      </div>
+      <div class="term">
+        <div class="word">ラトムー <span class="kana">RATOMU</span></div>
+        <div class="desc">ラトンの後に宣言できる唯一の正しい終了宣言。それ以外を宣言すると指摘され、ゲームが終了する。</div>
+      </div>
+      <div class="term">
+        <div class="word">ラトムールガイ <span class="kana">RATOMUURUGAI</span></div>
+        <div class="desc">交換を終えると同時に、次の自分の番の開始時に全員の手札を公開して勝負する宣言（2手番目以降のみ）。</div>
+      </div>
+      <div class="term">
+        <div class="word">アシュラってる！ <span class="kana">ASHURATTERU</span></div>
+        <div class="desc">相手の手札の合計が「10」になった瞬間を指摘する常駐ボタン。的中で得点。</div>
+      </div>
+      <div class="term">
+        <div class="word">絵柄 <span class="kana">ハティロン・アノン・ドーン・ヤール</span></div>
+        <div class="desc">4種の絵柄。それぞれ固有の色を持つ（黄・紫・赤・青）。カードの枠色（桃・青・緑・黄）は別の属性。</div>
+      </div>
+    </div>
+  </div>
+
+<a class="glossary-back" href="index.html">← タイトルに戻る</a>
+</main>
+
+<footer>
+  RATTEL — THE UNDERWORLD CARD GAME
+</footer>
+
+<script>
+  // Keep the decorative glyph background behavior from the original page when available.
+  const glyphBg = document.querySelector('.glyph-bg');
+  if (glyphBg) {
+    const icons = [
+      '𓂀','𓆣','𓅃','𓃭','𓁹','𓂋','𓎛','𓏏','𓆑','𓊽','𓇳','𓋹'
+    ];
+    icons.forEach((icon, i) => {
+      const el = document.createElement('span');
+      el.textContent = icon;
+      el.style.left = ((i * 23 + 7) % 100) + '%';
+      el.style.top = ((i * 31 + 11) % 100) + '%';
+      glyphBg.appendChild(el);
+    });
+  }
+</script>
+</body>
+</html>
