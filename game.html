@@ -109,8 +109,8 @@
   .moolgai-flash .txt{font-family:'Cinzel',serif; font-size:clamp(28px,7vw,52px); color:var(--gold-bright); text-shadow:0 0 30px rgba(232,200,116,.8); text-align:center; padding:0 20px;}
   @keyframes moolgai-flash{0%{opacity:0;}12%{opacity:1;}82%{opacity:1;}100%{opacity:0;}}
 
-  .mc-chat{position:fixed; right:10px; top:56px; z-index:8; display:flex; flex-direction:column; gap:2px; width:min(62vw,300px); max-height:46vh; overflow-y:auto; pointer-events:auto;}
-  .mc-line{background:rgba(10,7,4,.6); color:#e9e9e9; font-family:'Space Mono',monospace; font-size:10.5px; padding:3px 7px; border-radius:2px; line-height:1.4;}
+  .mc-chat{position:fixed; right:10px; bottom:78px; z-index:8; display:flex; flex-direction:column; gap:2px; width:min(48vw,240px); max-height:22vh; overflow-y:auto; pointer-events:none; opacity:.72;}
+  .mc-line{background:rgba(10,7,4,.72); color:#e9e9e9; font-family:'Space Mono',monospace; font-size:9px; padding:2px 6px; border-radius:2px; line-height:1.3;}
   .mc-line b{color:var(--gold-bright);}
 
   .pass-overlay{position:fixed; inset:0; background:var(--void); z-index:25; display:none; align-items:center; justify-content:center; flex-direction:column; gap:18px; text-align:center; padding:20px;}
@@ -311,11 +311,12 @@
   const localPlayerCount = Math.max(1, Math.min(4, parseInt(params.get('players'),10) || 1));
 
   let seats, field, underworld, turnIdx, turnCount, phase, pendingAction, selectedHandIdx, revealDeclarer, matchNo;
-  let chatLog = [];
-  let revealState = null;
   let skillLock;
   let moolgaiLock;
   let hmsQueue = null;
+  let chatLog = [];
+  let gameEnded = false;
+  let endState = null;
 
   /* P2P Online State */
   let mySeatId = 'S';
@@ -341,44 +342,22 @@
   function newMatchDeal(){
     seats.forEach(s => { s.hand=[makeCard(),makeCard(),makeCard()]; });
     field = {N:makeCard(), S:makeCard(), E:makeCard(), W:makeCard()};
-    turnIdx=0; turnCount=1; phase='idle'; pendingAction=null; selectedHandIdx=null; revealDeclarer=null; hmsQueue=null;
-    revealState=null;
-    chatLog=[];
+    turnIdx=0; turnCount=1; phase='idle'; pendingAction=null; selectedHandIdx=null; revealDeclarer=null; hmsQueue=null; gameEnded=false; endState=null; chatLog=[];
     underworld=false;
     skillLock={used:false, by:null, type:null};
     moolgaiLock={usedBy:null};
   }
 
-  /* Build one complete serializable snapshot for every guest. */
-  function getSyncState(){
-    return {
-      seats: seats || [],
-      field: field || {N:null,S:null,E:null,W:null},
-      underworld: !!underworld,
-      turnIdx: Number.isInteger(turnIdx) ? turnIdx : 0,
-      turnCount: Number.isInteger(turnCount) ? turnCount : 1,
-      phase: phase || 'idle',
-      pendingAction: pendingAction || null,
-      skillLock: skillLock || {used:false, by:null, type:null},
-      moolgaiLock: moolgaiLock || {usedBy:null},
-      matchNo: Number.isInteger(matchNo) ? matchNo : 1,
-      revealDeclarer: revealDeclarer || null,
-      hmsQueue: hmsQueue || null,
-      chatLog: Array.isArray(chatLog) ? chatLog : [],
-      revealState: revealState || null
-    };
-  }
-
-  function sendSyncState(conn){
-    if(conn && conn.open){
-      conn.send({type:'SYNC_STATE', state:getSyncState()});
-    }
-  }
-
   /* Sync P2P game state to all guests */
   function broadcastState(){
     if(!isOnline || !isHost) return;
-    Object.values(guestConns).forEach(sendSyncState);
+    const state = {
+      seats, field, underworld, turnIdx, turnCount, phase, pendingAction,
+      skillLock, moolgaiLock, matchNo, revealDeclarer, hmsQueue
+    };
+    Object.values(guestConns).forEach(conn => {
+      if(conn && conn.open) conn.send({type: 'SYNC_STATE', state});
+    });
   }
 
   /* Receive P2P Action on Host */
@@ -492,17 +471,11 @@
       matchNo = 1;
       newMatchDeal();
       document.getElementById('lobbyOverlay').classList.remove('show');
-      render();
-      // First hide the lobby, then send a complete snapshot. Retry once shortly
-      // after in case a PeerJS connection is still becoming writable.
       broadcastLobbyStart();
       broadcastState();
-      setTimeout(() => {
-        if(isHost && onlineLobbyStarted) broadcastState();
-      }, 300);
-      setTimeout(() => {
-        if(isHost && onlineLobbyStarted) broadcastState();
-      }, 1000);
+      setTimeout(broadcastState, 300);
+      setTimeout(broadcastState, 1000);
+      render();
     });
   }
 
@@ -539,13 +512,6 @@
         conn.send({type: 'WELCOME', mySeatId: emptySeat.id, seats});
         updateLobbyUI();
         broadcastLobbyState();
-
-        // A player can join just after the host has pressed Start.
-        // Send the current complete game state immediately in that case.
-        if(onlineLobbyStarted){
-          conn.send({type:'LOBBY_START'});
-          sendSyncState(conn);
-        }
       } else {
         conn.send({type: 'FULL'});
       }
@@ -568,39 +534,22 @@
     }
     else if(data.type === 'LOBBY_START'){
       document.getElementById('lobbyOverlay').classList.remove('show');
-      // The host follows this message with SYNC_STATE. Do not rely on the
-      // static/default HTML; the first SYNC_STATE is what initializes the
-      // guest's board, hand, opponents, controls and chat.
     }
     else if(data.type === 'SYNC_STATE'){
-      const state = data.state || {};
-      if(!Array.isArray(state.seats) || !state.seats.length) return;
-
-      seats = state.seats;
-      field = state.field || {N:null,S:null,E:null,W:null};
-      underworld = !!state.underworld;
-      turnIdx = Number.isInteger(state.turnIdx) ? state.turnIdx : 0;
-      turnCount = Number.isInteger(state.turnCount) ? state.turnCount : 1;
-      phase = state.phase || 'idle';
-      pendingAction = state.pendingAction || null;
-      skillLock = state.skillLock || {used:false, by:null, type:null};
-      moolgaiLock = state.moolgaiLock || {usedBy:null};
-      matchNo = Number.isInteger(state.matchNo) ? state.matchNo : 1;
-      revealDeclarer = state.revealDeclarer || null;
-      hmsQueue = state.hmsQueue || null;
-      chatLog = Array.isArray(state.chatLog) ? state.chatLog : [];
-      revealState = state.revealState || null;
-
-      // State must be applied before any rendering. This is the guest's
-      // authoritative initialization path after LOBBY_START.
+      const oldState = {phase, turnIdx};
+      seats = data.state.seats;
+      field = data.state.field;
+      underworld = data.state.underworld;
+      turnIdx = data.state.turnIdx;
+      turnCount = data.state.turnCount;
+      phase = data.state.phase;
+      pendingAction = data.state.pendingAction;
+      skillLock = data.state.skillLock;
+      moolgaiLock = data.state.moolgaiLock;
+      matchNo = data.state.matchNo;
+      revealDeclarer = data.state.revealDeclarer;
+      hmsQueue = data.state.hmsQueue;
       render();
-      renderChatLog();
-
-      if(revealState){
-        showEndOverlay(revealState.title, revealState.body, revealState.scored, revealState.sessionOver);
-      } else {
-        document.getElementById('overlay').classList.remove('show');
-      }
     }
   }
 
@@ -610,10 +559,7 @@
     else if(actionType === 'tapper') startTapper();
     else if(actionType === 'hamusahamu') startHamusahamu();
     else if(actionType === 'answerHamusahamu') answerHamusahamu(payload);
-    else if(actionType === 'chooseDirection') {
-      selectedHandIdx = Number.isInteger(payload?.selectedHandIdx) ? payload.selectedHandIdx : null;
-      chooseDirection(payload.dir);
-    }
+    else if(actionType === 'chooseDirection') chooseDirection(payload);
     else if(actionType === 'chooseSymbol') chooseSymbol(payload);
     else if(actionType === 'endTurn') endTurn(seatId, payload.action, payload.isMoolgai);
     else if(actionType === 'attemptMoolgai') attemptMoolgai();
@@ -627,21 +573,12 @@
     if(isOnline) return seatId === mySeatId ? document.getElementById('selfArea') : null;
     return seatId === activeId() ? document.getElementById('selfArea') : null;
   }
-  function renderChatLog(){
-    const box = document.getElementById('mcChat');
-    box.innerHTML = '';
-    chatLog.forEach(html => {
-      const line = document.createElement('div');
-      line.className='mc-line'; line.innerHTML=html;
-      box.appendChild(line);
-    });
-    box.scrollTop = box.scrollHeight;
-  }
   function addChatLog(html){
-    chatLog.push(html);
-    if(chatLog.length > 100) chatLog = chatLog.slice(-100);
-    renderChatLog();
-    if(isHost) broadcastState();
+    const box = document.getElementById('mcChat');
+    const line = document.createElement('div');
+    line.className='mc-line'; line.innerHTML=html;
+    box.appendChild(line);
+    box.scrollTop = box.scrollHeight;
   }
   function declare(seatId, text){
     sfx.declare();
@@ -766,7 +703,7 @@
       addBtn(panel, '選ばない（場が変わる）', () => { sfx.click(); selectedHandIdx=null; phase='choose-direction'; setMessage('ラトン → 選ばない'); render(); });
     }
     else if(phase==='choose-direction'){
-      DIRS.forEach(d => addBtn(panel, DIR_TERM[d], () => { if(sendHostAction('chooseDirection', {dir:d, selectedHandIdx})) return; chooseDirection(d); }));
+      DIRS.forEach(d => addBtn(panel, DIR_TERM[d], () => { if(sendHostAction('chooseDirection', d)) return; chooseDirection(d); }));
     }
     else if(phase==='choose-symbol'){
       SYMBOLS.forEach(s => addBtn(panel, SYMBOL_LABEL[s], () => { if(sendHostAction('chooseSymbol', s)) return; chooseSymbol(s); }));
@@ -1040,6 +977,7 @@
     sfx.lamp();
     addChatLog(`試合${matchNo}: <b>${winner.name}</b>が優勝（${maxPts}pt）。`);
 
+    const html = revealGridHTML(scored, winner);
     const sessionOver = winner.lamps >= 2;
     if(sessionOver && winner.isHuman){ winner.score += 1; }
 
@@ -1048,12 +986,7 @@
       ? `${winner.name}が銅の電球を2個点灯させ、WINNERとなった。（この試合の得点：${maxPts}）`
       : `${winner.name}が優勝（${maxPts}pt）。ランプが1個点灯した。`;
 
-    revealState = {
-      title, body, sessionOver,
-      winnerSeatId: winner.id,
-      scored: scored.map(x => ({seatId:x.seat.id, name:x.seat.name, hand:x.seat.hand, pts:x.pts}))
-    };
-    showEndOverlay(title, body, revealState.scored, sessionOver);
+    showEndOverlay(title, html, body, scored, sessionOver);
     if(isHost) broadcastState();
   }
 
@@ -1074,80 +1007,37 @@
     if(isHost) broadcastState();
   }
 
-  function showEndOverlay(title, body, scored, sessionOver){
-    document.getElementById('overlayTitle').textContent = title || '';
-    const reveal = Array.isArray(scored) ? scored : [];
-    document.getElementById('overlayReveal').innerHTML = `<div class="reveal-grid">` + reveal.map(x => `
-      <div class="reveal-seat ${revealState && x.seatId===revealState.winnerSeatId?'winner':''}" data-seat="${x.seatId}">
-        <div class="rs-name">${x.name}</div>
-        <div class="rs-hand">${(x.hand||[]).map(c=>cardHTML(c,'small')).join('')}</div>
-        <div class="rs-score">${x.pts}pt</div>
-      </div>`).join('') + `</div>`;
-    document.getElementById('overlayBody').textContent = body || '';
-
+  function showEndOverlay(title, revealHTML, body, scored, sessionOver){
+    document.getElementById('overlayTitle').textContent = title;
+    document.getElementById('overlayReveal').innerHTML = revealHTML || '';
+    document.getElementById('overlayBody').textContent = body;
     const ashuraArea = document.getElementById('ashuraArea');
     ashuraArea.innerHTML = '<div class="ashura-feedback" id="ashuraFeedback"></div>';
-
-    if(reveal.length){
-      const startBtn = document.createElement('button');
-      startBtn.className = 'ashura';
-      startBtn.textContent = 'アシュラってる！';
-      startBtn.addEventListener('click', () => {
-        sfx.click();
-        const picker = document.createElement('div');
-        picker.className = 'ashura-picker';
-        const others = reveal.filter(x => x.seatId !== mySeatId);
-        picker.innerHTML = '<div style="font-size:12px;color:var(--gold-bright);width:100%;">誰が？</div>';
-        others.forEach(x => {
-          const b = document.createElement('button');
-          b.className = 'ashura';
-          b.textContent = x.name;
-          b.addEventListener('click', () => {
-            picker.querySelectorAll('button').forEach(bb => bb.disabled = true);
-            if(sendHostAction('ashura', x.seatId)) return;
-            handleAshuraAccusation(mySeatId, x.seatId);
-          });
-          picker.appendChild(b);
-        });
+    if(scored){
+      const startBtn=document.createElement('button'); startBtn.className='ashura'; startBtn.textContent='アシュラってる！';
+      startBtn.addEventListener('click',()=>{
+        sfx.click(); const picker=document.createElement('div'); picker.className='ashura-picker';
+        const others=scored.filter(x=>x.seat.id!==mySeatId);
+        picker.innerHTML='<div style="font-size:12px;color:var(--gold-bright);width:100%;">誰が？</div>';
+        others.forEach(x=>{ const b=document.createElement('button'); b.className='ashura'; b.textContent=x.seat.name; b.addEventListener('click',()=>{ picker.querySelectorAll('button').forEach(bb=>bb.disabled=true); if(sendHostAction('ashura',x.seat.id)) return; handleAshuraAccusation(mySeatId,x.seat.id); }); picker.appendChild(b); });
         startBtn.replaceWith(picker);
       });
-      ashuraArea.insertBefore(startBtn, ashuraArea.firstChild);
+      ashuraArea.insertBefore(startBtn,ashuraArea.firstChild);
     }
-
-    const btnRow = document.getElementById('overlayBtnRow');
-    btnRow.innerHTML = '';
-    if(!isOnline || isHost){
-      if(sessionOver){
-        sfx.win();
-        const again = document.createElement('button');
-        again.textContent = 'もう一度';
-        again.addEventListener('click', () => {
-          sfx.click();
-          document.getElementById('overlay').classList.remove('show');
-          seats.forEach(s => { s.lamps=0; s.score=0; });
-          matchNo = 1;
-          newMatchDeal();
-          render();
-          if(isHost) broadcastState();
-        });
-        btnRow.appendChild(again);
-      } else {
-        const next = document.createElement('button');
-        next.textContent = '次の試合へ';
-        next.addEventListener('click', () => {
-          sfx.click();
-          document.getElementById('overlay').classList.remove('show');
-          matchNo++;
-          newMatchDeal();
-          render();
-          if(isHost) broadcastState();
-        });
-        btnRow.appendChild(next);
-      }
+    const btnRow=document.getElementById('overlayBtnRow'); btnRow.innerHTML='';
+    if(isOnline && !isHost){
+      btnRow.innerHTML='<span style="font-size:11px;color:var(--papyrus-dim);">ホストの操作を待っています...</span>';
+    } else if(sessionOver){
+      sfx.win(); const again=document.createElement('button'); again.textContent='もう一度';
+      again.addEventListener('click',()=>{ sfx.click(); document.getElementById('overlay').classList.remove('show'); seats.forEach(s=>{s.lamps=0;s.score=0;}); matchNo=1; newMatchDeal(); render(); if(isHost) broadcastState(); });
+      btnRow.appendChild(again);
     } else {
-      btnRow.innerHTML = '<span style="font-size:11px; color:var(--papyrus-dim);">ホストの操作を待っています...</span>';
+      const next=document.createElement('button'); next.textContent='次の試合へ';
+      next.addEventListener('click',()=>{ sfx.click(); document.getElementById('overlay').classList.remove('show'); matchNo++; newMatchDeal(); render(); if(isHost) broadcastState(); });
+      btnRow.appendChild(next);
     }
     document.getElementById('overlay').classList.add('show');
+    renderChat();
     render();
   }
 
