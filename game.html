@@ -157,7 +157,7 @@
     <span class="match-pill" id="matchPill">試合 1</span>
     <span class="room-pill" id="roomPill"></span>
   </div>
-  <button id="sfxToggle">♪ 音: ON</button>
+  <div style="display:flex;gap:6px;align-items:center;"><button id="audioEnable" style="display:none;font-family:'Space Mono',monospace;font-size:10px;color:var(--gold-bright);background:none;border:1px solid var(--gold);border-radius:14px;padding:4px 10px;cursor:pointer;">♪ 音を有効化</button><button id="sfxToggle">♪ 音: ON</button></div>
 </div>
 
 <div class="table-outer">
@@ -275,6 +275,20 @@
 
   let audioCtx = null, sfxOn = true;
   let audioUnlocked = false;
+  let audioUnlockPromise = null;
+  let remoteSoundSeq = 0;
+  let lastSound = null;
+
+  function warmupAudio(ctx){
+    if(!ctx) return;
+    try{
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.00001, ctx.currentTime);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(); osc.stop(ctx.currentTime + 0.03);
+    }catch(e){}
+  }
   function ensureAudio(){
     if(!sfxOn) return null;
     if(!audioCtx){ try{ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return null; } }
@@ -282,14 +296,25 @@
     return audioCtx;
   }
   function unlockAudio(){
-    if(audioUnlocked) return;
+    if(audioUnlocked && audioCtx && audioCtx.state === 'running') return Promise.resolve();
     const ctx = ensureAudio();
-    if(!ctx) return;
-    audioUnlocked = true;
-    if(ctx.state === 'suspended') ctx.resume().catch(()=>{});
+    if(!ctx) return Promise.resolve();
+    warmupAudio(ctx);
+    if(ctx.state === 'running'){
+      audioUnlocked = true;
+      return Promise.resolve();
+    }
+    if(!audioUnlockPromise){
+      audioUnlockPromise = ctx.resume().then(()=>{
+        audioUnlocked = ctx.state === 'running';
+        if(audioUnlocked) warmupAudio(ctx);
+      }).catch(()=>{}).finally(()=>{ audioUnlockPromise=null; });
+    }
+    return audioUnlockPromise;
   }
   function tone(freq, dur, type, vol, delay){
     const ctx = ensureAudio(); if(!ctx) return;
+    if(ctx.state !== 'running') return;
     const t0 = ctx.currentTime + (delay||0);
     const osc = ctx.createOscillator(); const gain = ctx.createGain();
     osc.type = type||'sine'; osc.frequency.setValueAtTime(freq, t0);
@@ -310,6 +335,13 @@
     ashuraHit: () => { tone(880,.15,'square',.12); tone(1180,.2,'square',.1,.1); },
     ashuraMiss: () => tone(160,.25,'square',.12),
   };
+
+  function broadcastSound(type){
+    if(!isOnline || !isHost) return;
+    remoteSoundSeq++;
+    lastSound = type;
+    broadcastState();
+  }
 
   /* ============ State & Params ============ */
   const params = new URLSearchParams(window.location.search);
@@ -365,7 +397,7 @@
       seats, field, underworld, turnIdx, turnCount, phase, pendingAction,
       skillLock, moolgaiLock, matchNo, revealDeclarer,
       hmsQueue: hmsQueue ? {order:hmsQueue.order, idx:hmsQueue.idx, seatId:hmsQueue.seatId} : null,
-      gameEnded, endState, chatLog, eventSeq, lastEvent
+      gameEnded, endState, chatLog, eventSeq, lastEvent, remoteSoundSeq, lastSound
     };
     Object.values(guestConns).forEach(conn => {
       if(conn && conn.open) conn.send({type: 'SYNC_STATE', state});
@@ -531,7 +563,7 @@
               seats, field, underworld, turnIdx, turnCount, phase, pendingAction,
               skillLock, moolgaiLock, matchNo, revealDeclarer,
               hmsQueue: hmsQueue ? {order:hmsQueue.order, idx:hmsQueue.idx, seatId:hmsQueue.seatId} : null,
-              gameEnded, endState, chatLog, eventSeq, lastEvent
+              gameEnded, endState, chatLog, eventSeq, lastEvent, remoteSoundSeq, lastSound
             }});
           }, 100);
         }
@@ -593,6 +625,21 @@
         lastEvent = st.lastEvent || lastEvent;
       }
 
+      if(typeof st.remoteSoundSeq === 'number' && st.remoteSoundSeq > remoteSoundSeq){
+        remoteSoundSeq = st.remoteSoundSeq;
+        if(st.lastSound){
+          const sound = st.lastSound;
+          if(sound === 'click') sfx.click();
+          else if(sound === 'declare') sfx.declare();
+          else if(sound === 'swap') sfx.swap();
+          else if(sound === 'moolgai') sfx.moolgai();
+          else if(sound === 'foul') sfx.foul();
+          else if(sound === 'lamp') sfx.lamp();
+          else if(sound === 'win') sfx.win();
+          else if(sound === 'ashuraHit') sfx.ashuraHit();
+          else if(sound === 'ashuraMiss') sfx.ashuraMiss();
+        }
+      }
       renderChat();
       render();
       if(gameEnded && endState){
@@ -636,6 +683,7 @@
   }
   function declare(seatId, text){
     sfx.declare();
+    if(isOnline && isHost){ remoteSoundSeq++; lastSound='declare'; }
     if(isOnline && isHost){ eventSeq++; lastEvent={type:'declare', seatId, text}; }
     const anchor = bubbleAnchorFor(seatId);
     if(anchor){
@@ -905,6 +953,7 @@
 
   function foul(seatId, wrongLabel){
     sfx.foul();
+    if(isOnline && isHost){ remoteSoundSeq++; lastSound='foul'; }
     const seat = seatById(seatId);
     const title = '指摘されました';
     const body = `${seat.name}が「${wrongLabel}」と誤った宣言をした。ルール違反のため、この試合は終了する（ペナルティなし）。`;
@@ -919,6 +968,7 @@
   }
 
   function registerMoolgai(seatId){
+    sfx.moolgai();
     moolgaiLock = {usedBy:seatId};
     revealDeclarer = seatId;
     eventSeq++;
@@ -1065,6 +1115,7 @@
     const html = revealGridHTML(scored, winner);
     const sessionOver = winner.lamps >= 2;
     if(sessionOver && winner.isHuman){ winner.score += 1; }
+    if(isOnline && isHost && sessionOver){ remoteSoundSeq++; lastSound='win'; }
 
     const title = sessionOver ? (winner.isHuman ? `${winner.name} WINNER` : '勝負決着') : `試合${matchNo}結果`;
     const body = sessionOver
@@ -1087,10 +1138,12 @@
     if(hit){
       seatById(accuserSeatId).score += 1;
       sfx.ashuraHit();
+      if(isOnline && isHost){ remoteSoundSeq++; lastSound='ashuraHit'; }
       fb.textContent = `アシュラってる！ → ${targetSeat.name}を的中（+1）`;
       addChatLog(`<b>${seatById(accuserSeatId).name}</b>「アシュラってる！」→ ${targetSeat.name}的中（+1）`);
     } else {
       sfx.ashuraMiss();
+      if(isOnline && isHost){ remoteSoundSeq++; lastSound='ashuraMiss'; }
       fb.textContent = `アシュラってる！ → ${targetSeat.name}は空振り`;
       addChatLog(`<b>${seatById(accuserSeatId).name}</b>「アシュラってる！」→ ${targetSeat.name}空振り`);
     }
@@ -1156,12 +1209,28 @@
 
   function initSfxToggle(){
     const btn = document.getElementById('sfxToggle');
-    btn.addEventListener('click', () => {
-      unlockAudio();
-      sfxOn = !sfxOn;
-      btn.textContent = '♪ 音: ' + (sfxOn ? 'ON' : 'OFF');
-      if(sfxOn) ensureAudio();
+    const enable = document.getElementById('audioEnable');
+    enable.addEventListener('click', async () => {
+      sfxOn = true;
+      btn.textContent = '♪ 音: ON';
+      await unlockAudio();
+      enable.style.display = 'none';
+      tone(660,.08,'sine',.08);
     });
+    btn.addEventListener('click', async () => {
+      if(sfxOn){
+        sfxOn = false;
+        btn.textContent = '♪ 音: OFF';
+      }else{
+        sfxOn = true;
+        btn.textContent = '♪ 音: ON';
+        await unlockAudio();
+        tone(660,.08,'sine',.08);
+      }
+    });
+    document.addEventListener('click', () => {
+      if(sfxOn && (!audioCtx || audioCtx.state !== 'running')) enable.style.display = 'inline-block';
+    }, {once:true, capture:true});
   }
 
   initGlyphStrip();
