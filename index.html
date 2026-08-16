@@ -179,6 +179,12 @@
   }
   .term.direction .word{color:var(--gold-bright);}
 
+  .glossary-open{display:block;margin:16px auto 0;padding:10px 28px;font-family:'Cinzel',serif;font-size:14px;color:var(--gold-bright);background:transparent;border:1px solid var(--gold);border-radius:4px;cursor:pointer;}
+  .glossary-modal{position:fixed;inset:0;z-index:1000;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.82);}
+  .glossary-modal.open{display:flex;}
+  .glossary-modal .glossary{display:block;width:min(880px,100%);max-height:88vh;overflow-y:auto;margin:0;padding:28px 24px 24px;background:var(--void);border:1px solid var(--gold);border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,.7);}
+  .glossary-close{display:block;margin:20px auto 0;padding:10px 28px;font-family:'Cinzel',serif;font-size:13px;color:var(--void);background:linear-gradient(180deg,var(--gold-bright),var(--gold));border:1px solid #8a6a2e;border-radius:4px;cursor:pointer;}
+
   footer{
     padding:30px 24px 50px;
     font-family:'Space Mono', monospace;
@@ -216,10 +222,12 @@
       冒険を始める
       <span class="arrow">→</span>
     </a>
+    <button class="glossary-open" id="glossaryOpen" type="button">用語集を見る</button>
   </div>
 
-  <div class="glossary">
-    <div class="glossary-head">
+  <div class="glossary-modal" id="glossaryModal">
+    <div class="glossary">
+      <div class="glossary-head">
       <h2 id="glossaryTitle">用語集 — GLOSSARY</h2>
       <div class="rule"></div>
     </div>
@@ -276,6 +284,8 @@
         <div class="word">絵柄 <span class="kana">ハティロン・アノン・ドーン・ヤール</span></div>
         <div class="desc">4種の絵柄。それぞれ固有の色を持つ（黄・紫・赤・青）。カードの枠色（桃・青・緑・黄）は別の属性。</div>
       </div>
+      </div>
+      <button class="glossary-close" id="glossaryClose" type="button">閉じる</button>
     </div>
   </div>
 
