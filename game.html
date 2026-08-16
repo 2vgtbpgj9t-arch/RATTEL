@@ -355,7 +355,8 @@
     if(!isOnline || !isHost) return;
     const state = {
       seats, field, underworld, turnIdx, turnCount, phase, pendingAction,
-      skillLock, moolgaiLock, matchNo, revealDeclarer, hmsQueue,
+      skillLock, moolgaiLock, matchNo, revealDeclarer,
+      hmsQueue: hmsQueue ? {order:hmsQueue.order, idx:hmsQueue.idx, seatId:hmsQueue.seatId} : null,
       gameEnded, endState, chatLog, eventSeq, lastEvent
     };
     Object.values(guestConns).forEach(conn => {
@@ -520,7 +521,8 @@
           setTimeout(() => {
             if(conn && conn.open) conn.send({type:'SYNC_STATE', state:{
               seats, field, underworld, turnIdx, turnCount, phase, pendingAction,
-              skillLock, moolgaiLock, matchNo, revealDeclarer, hmsQueue,
+              skillLock, moolgaiLock, matchNo, revealDeclarer,
+              hmsQueue: hmsQueue ? {order:hmsQueue.order, idx:hmsQueue.idx, seatId:hmsQueue.seatId} : null,
               gameEnded, endState, chatLog, eventSeq, lastEvent
             }});
           }, 100);
@@ -591,7 +593,7 @@
     else if(actionType === 'tapper') startTapper();
     else if(actionType === 'hamusahamu') startHamusahamu();
     else if(actionType === 'answerHamusahamu') answerHamusahamu(payload);
-    else if(actionType === 'chooseDirection') chooseDirection(payload);
+    else if(actionType === 'chooseDirection') chooseDirection(payload && payload.dir ? payload.dir : payload, payload && Object.prototype.hasOwnProperty.call(payload,'handIdx') ? payload.handIdx : null);
     else if(actionType === 'chooseSymbol') chooseSymbol(payload);
     else if(actionType === 'endTurn') endTurn(seatId, payload.action, payload.isMoolgai);
     else if(actionType === 'attemptMoolgai') attemptMoolgai();
@@ -612,10 +614,8 @@
     box.scrollTop = box.scrollHeight;
   }
   function addChatLog(html){
-    if(!chatLog.includes(html) || chatLog[chatLog.length-1] !== html){
-      chatLog.push(html);
-      if(chatLog.length > 50) chatLog.shift();
-    }
+    chatLog.push(html);
+    if(chatLog.length > 50) chatLog.shift();
     renderChat();
   }
   function declare(seatId, text){
@@ -720,6 +720,11 @@
 
     const isMyTurn = isOnline ? (activeId()===mySeatId) : true;
 
+    if(phase==='hms-wait'){
+      addBtn(panel, '次のプレイヤーの回答を待っています…', ()=>{}, true);
+      return;
+    }
+
     if(phase==='choose-number'){
       const activeHmsSeat = hmsQueue ? hmsQueue.seatId : activeId();
       if(!isOnline || activeHmsSeat === mySeatId){
@@ -747,7 +752,7 @@
       addBtn(panel, '選ばない（場が変わる）', () => { sfx.click(); selectedHandIdx=null; phase='choose-direction'; setMessage('ラトン → 選ばない'); render(); });
     }
     else if(phase==='choose-direction'){
-      DIRS.forEach(d => addBtn(panel, DIR_TERM[d], () => { if(sendHostAction('chooseDirection', d)) return; chooseDirection(d); }));
+      DIRS.forEach(d => addBtn(panel, DIR_TERM[d], () => { const payload={dir:d, handIdx:selectedHandIdx}; if(sendHostAction('chooseDirection', payload)) return; chooseDirection(d, selectedHandIdx); }));
     }
     else if(phase==='choose-symbol'){
       SYMBOLS.forEach(s => addBtn(panel, SYMBOL_LABEL[s], () => { if(sendHostAction('chooseSymbol', s)) return; chooseSymbol(s); }));
@@ -838,29 +843,34 @@
 
   function answerHamusahamu(n){
     const q = hmsQueue;
+    if(!q) return;
     const self = seatById(q.seatId);
+    if(!self) return;
     const actualMax = Math.max(...self.hand.map(c=>c.number));
     if(n !== actualMax){ foul(q.seatId, 'ハムサハム' + n + '（誤申告）'); return; }
     declare(q.seatId, 'ハムサハム' + n);
     hmsQueue = null;
+    phase = 'hms-wait';
     render();
     if(isHost) broadcastState();
     setTimeout(() => runHamusahamuSequence(q.order, q.idx+1, q.onComplete), 900);
   }
 
-  function chooseDirection(dir){
+  function chooseDirection(dir, handIdx){
     sfx.click();
     const active = activeSeat();
-    if(selectedHandIdx!==null){
-      const tmp = active.hand[selectedHandIdx];
-      active.hand[selectedHandIdx] = field[dir];
+    const idx = (typeof handIdx === 'number' && handIdx >= 0 && handIdx < active.hand.length) ? handIdx : null;
+    if(idx!==null){
+      const tmp = active.hand[idx];
+      active.hand[idx] = field[dir];
       field[dir] = tmp;
     } else {
       field[dir] = makeCard();
     }
     phase='end-choice';
     setMessage('ラトン → ' + DIR_TERM[dir]);
-    declare(active.id, 'ラトン→' + DIR_TERM[dir]);
+    // 方角宣言はラトンとは別の1つの宣言として記録する。
+    declare(active.id, DIR_TERM[dir] + '！');
     render();
     flashFieldSlot(dir);
     selectedHandIdx=null;
@@ -891,17 +901,19 @@
     if(isHost) broadcastState();
   }
 
+  function registerMoolgai(seatId){
+    moolgaiLock = {usedBy:seatId};
+    revealDeclarer = seatId;
+    eventSeq++;
+    lastEvent = {seq:eventSeq, type:'moolgai', seatId, text:'ムールガイ！'};
+    showMoolgaiFlash();
+  }
+
   function endTurn(seatId, action, isMoolgai){
     const stem = ACTION_STEM[action] || '';
     const label = stem + (isMoolgai ? 'ムールガイ' : 'ムー');
     declare(seatId, label);
-    if(isMoolgai){
-      moolgaiLock = {usedBy:seatId};
-      revealDeclarer = seatId;
-      eventSeq++;
-      lastEvent = {seq:eventSeq, type:'moolgai', seatId, text:'ムールガイ！'};
-      showMoolgaiFlash();
-    }
+    if(isMoolgai) registerMoolgai(seatId);
     phase='idle'; pendingAction=null; selectedHandIdx=null;
     advanceTurn();
   }
@@ -979,12 +991,13 @@
           const hIdx = rnd(cpu.hand.length);
           const tmp = cpu.hand[hIdx]; cpu.hand[hIdx]=field[dir]; field[dir]=tmp;
         } else { field[dir] = makeCard(); }
-        declare(id, 'ラトン→'+DIR_TERM[dir]);
+        declare(id, 'ラトン！');
+        declare(id, DIR_TERM[dir] + '！');
         render(); flashFieldSlot(dir);
         setTimeout(()=>{
           const label = ACTION_STEM.raton + (canMoolgai?'ムールガイ':'ムー');
           declare(id, label);
-          if(canMoolgai){ moolgaiLock={usedBy:id}; revealDeclarer=id; showMoolgaiFlash(); }
+          if(canMoolgai){ registerMoolgai(id); }
           render();
           setTimeout(() => advanceTurn(), 1600);
         }, 1300);
@@ -995,14 +1008,14 @@
         setTimeout(()=>{
           const label = ACTION_STEM.foran + (canMoolgai?'ムールガイ':'ムー');
           declare(id, label);
-          if(canMoolgai){ moolgaiLock={usedBy:id}; revealDeclarer=id; showMoolgaiFlash(); }
+          if(canMoolgai){ registerMoolgai(id); }
           render();
           setTimeout(() => advanceTurn(), 1600);
         }, 1300);
       } else {
         const label = canMoolgai ? 'ムールガイ' : 'ムー';
         declare(id, label);
-        if(canMoolgai){ moolgaiLock={usedBy:id}; revealDeclarer=id; showMoolgaiFlash(); }
+        if(canMoolgai){ registerMoolgai(id); }
         render();
         setTimeout(() => advanceTurn(), 1600);
       }
