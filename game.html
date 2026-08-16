@@ -274,11 +274,19 @@
   function roundScoreFor(seat){ return underworld ? total(seat.hand) : evaluateScore(seat.hand); }
 
   let audioCtx = null, sfxOn = true;
+  let audioUnlocked = false;
   function ensureAudio(){
     if(!sfxOn) return null;
     if(!audioCtx){ try{ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return null; } }
-    if(audioCtx.state === 'suspended') audioCtx.resume();
+    if(audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
     return audioCtx;
+  }
+  function unlockAudio(){
+    if(audioUnlocked) return;
+    const ctx = ensureAudio();
+    if(!ctx) return;
+    audioUnlocked = true;
+    if(ctx.state === 'suspended') ctx.resume().catch(()=>{});
   }
   function tone(freq, dur, type, vol, delay){
     const ctx = ensureAudio(); if(!ctx) return;
@@ -571,7 +579,15 @@
       if(st.eventSeq && st.eventSeq !== eventSeq){
         eventSeq = st.eventSeq;
         lastEvent = st.lastEvent || null;
-        if(lastEvent && lastEvent.type === 'moolgai') showMoolgaiFlash();
+        if(lastEvent){
+          if(lastEvent.type === 'moolgai'){ showMoolgaiFlash(); }
+          else if(lastEvent.type === 'declare'){ sfx.declare(); }
+          else if(lastEvent.type === 'swap'){ sfx.swap(); }
+          else if(lastEvent.type === 'foul'){ sfx.foul(); }
+          else if(lastEvent.type === 'matchEnd'){ sfx.lamp(); sfx.win(); }
+          else if(lastEvent.type === 'ashuraHit'){ sfx.ashuraHit(); }
+          else if(lastEvent.type === 'ashuraMiss'){ sfx.ashuraMiss(); }
+        }
       } else {
         eventSeq = st.eventSeq || eventSeq;
         lastEvent = st.lastEvent || lastEvent;
@@ -620,6 +636,7 @@
   }
   function declare(seatId, text){
     sfx.declare();
+    if(isOnline && isHost){ eventSeq++; lastEvent={type:'declare', seatId, text}; }
     const anchor = bubbleAnchorFor(seatId);
     if(anchor){
       const b = document.createElement('div');
@@ -1042,6 +1059,7 @@
     const winner = winners[rnd(winners.length)].seat;
     winner.lamps = Math.min(2, winner.lamps+1);
     sfx.lamp();
+    if(isOnline && isHost){ eventSeq++; lastEvent={type:'matchEnd', winnerId:winner.id}; }
     addChatLog(`試合${matchNo}: <b>${winner.name}</b>が優勝（${maxPts}pt）。`);
 
     const html = revealGridHTML(scored, winner);
@@ -1076,7 +1094,12 @@
       fb.textContent = `アシュラってる！ → ${targetSeat.name}は空振り`;
       addChatLog(`<b>${seatById(accuserSeatId).name}</b>「アシュラってる！」→ ${targetSeat.name}空振り`);
     }
-    if(isHost) broadcastState();
+    if(isHost){
+      endState = endState || {};
+      endState.ashuraResult = {accuserSeatId, targetSeatId, hit, text: fb.textContent};
+      eventSeq++; lastEvent={type: hit ? 'ashuraHit' : 'ashuraMiss'};
+      broadcastState();
+    }
   }
 
   function showEndOverlay(title, revealHTML, body, scored, sessionOver, fromSync=false){
@@ -1085,22 +1108,26 @@
     document.getElementById('overlayBody').textContent = body;
     const ashuraArea = document.getElementById('ashuraArea');
     ashuraArea.innerHTML = '<div class="ashura-feedback" id="ashuraFeedback"></div>';
-    if(scored){
+    const displayScored = scored || seats.map(s => ({seat:s, pts:roundScoreFor(s)}));
+    if(displayScored && displayScored.length){
       const startBtn=document.createElement('button'); startBtn.className='ashura'; startBtn.textContent='アシュラってる！';
       startBtn.addEventListener('click',()=>{
-        sfx.click(); const picker=document.createElement('div'); picker.className='ashura-picker';
-        const others=scored.filter(x=>x.seat.id!==mySeatId);
+        unlockAudio(); sfx.click(); const picker=document.createElement('div'); picker.className='ashura-picker';
+        const others=displayScored.filter(x=>x.seat.id!==mySeatId);
         picker.innerHTML='<div style="font-size:12px;color:var(--gold-bright);width:100%;">誰が？</div>';
-        others.forEach(x=>{ const b=document.createElement('button'); b.className='ashura'; b.textContent=x.seat.name; b.addEventListener('click',()=>{ picker.querySelectorAll('button').forEach(bb=>bb.disabled=true); if(sendHostAction('ashura',x.seat.id)) return; handleAshuraAccusation(mySeatId,x.seat.id); }); picker.appendChild(b); });
+        others.forEach(x=>{ const b=document.createElement('button'); b.className='ashura'; b.textContent=x.seat.name; b.addEventListener('click',()=>{ unlockAudio(); picker.querySelectorAll('button').forEach(bb=>bb.disabled=true); if(sendHostAction('ashura',x.seat.id)) return; handleAshuraAccusation(mySeatId,x.seat.id); }); picker.appendChild(b); });
         startBtn.replaceWith(picker);
       });
       ashuraArea.insertBefore(startBtn,ashuraArea.firstChild);
+    }
+    if(endState && endState.ashuraResult){
+      document.getElementById('ashuraFeedback').textContent = endState.ashuraResult.text;
     }
     const btnRow=document.getElementById('overlayBtnRow'); btnRow.innerHTML='';
     if(isOnline && !isHost){
       btnRow.innerHTML='<span style="font-size:11px;color:var(--papyrus-dim);">ホストの操作を待っています...</span>';
     } else if(sessionOver){
-      sfx.win(); const again=document.createElement('button'); again.textContent='もう一度';
+      const again=document.createElement('button'); again.textContent='もう一度';
       again.addEventListener('click',()=>{ sfx.click(); document.getElementById('overlay').classList.remove('show'); seats.forEach(s=>{s.lamps=0;s.score=0;}); matchNo=1; gameEnded=false; endState=null; newMatchDeal(); render(); if(isHost) broadcastState(); });
       btnRow.appendChild(again);
     } else {
@@ -1112,6 +1139,9 @@
     renderChat();
     render();
   }
+
+  document.addEventListener('pointerdown', unlockAudio, {passive:true});
+  document.addEventListener('keydown', unlockAudio, {passive:true});
 
   function initGlyphStrip(){
     const icons = [
@@ -1127,6 +1157,7 @@
   function initSfxToggle(){
     const btn = document.getElementById('sfxToggle');
     btn.addEventListener('click', () => {
+      unlockAudio();
       sfxOn = !sfxOn;
       btn.textContent = '♪ 音: ' + (sfxOn ? 'ON' : 'OFF');
       if(sfxOn) ensureAudio();
