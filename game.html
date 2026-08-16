@@ -109,8 +109,8 @@
   .moolgai-flash .txt{font-family:'Cinzel',serif; font-size:clamp(28px,7vw,52px); color:var(--gold-bright); text-shadow:0 0 30px rgba(232,200,116,.8); text-align:center; padding:0 20px;}
   @keyframes moolgai-flash{0%{opacity:0;}12%{opacity:1;}82%{opacity:1;}100%{opacity:0;}}
 
-  .mc-chat{position:fixed; right:10px; bottom:78px; z-index:8; display:flex; flex-direction:column; gap:2px; width:min(48vw,240px); max-height:22vh; overflow-y:auto; pointer-events:none; opacity:.72;}
-  .mc-line{background:rgba(10,7,4,.72); color:#e9e9e9; font-family:'Space Mono',monospace; font-size:9px; padding:2px 6px; border-radius:2px; line-height:1.3;}
+  .mc-chat{position:fixed; right:8px; bottom:62px; z-index:8; display:flex; flex-direction:column; gap:2px; width:min(34vw,190px); max-height:14vh; overflow-y:auto; pointer-events:none; opacity:.58;}
+  .mc-line{background:rgba(10,7,4,.62); color:#e9e9e9; font-family:'Space Mono',monospace; font-size:8px; padding:2px 5px; border-radius:2px; line-height:1.25;}
   .mc-line b{color:var(--gold-bright);}
 
   .pass-overlay{position:fixed; inset:0; background:var(--void); z-index:25; display:none; align-items:center; justify-content:center; flex-direction:column; gap:18px; text-align:center; padding:20px;}
@@ -317,6 +317,8 @@
   let chatLog = [];
   let gameEnded = false;
   let endState = null;
+  let eventSeq = 0;
+  let lastEvent = null;
 
   /* P2P Online State */
   let mySeatId = 'S';
@@ -342,7 +344,7 @@
   function newMatchDeal(){
     seats.forEach(s => { s.hand=[makeCard(),makeCard(),makeCard()]; });
     field = {N:makeCard(), S:makeCard(), E:makeCard(), W:makeCard()};
-    turnIdx=0; turnCount=1; phase='idle'; pendingAction=null; selectedHandIdx=null; revealDeclarer=null; hmsQueue=null; gameEnded=false; endState=null; chatLog=[];
+    turnIdx=0; turnCount=1; phase='idle'; pendingAction=null; selectedHandIdx=null; revealDeclarer=null; hmsQueue=null; gameEnded=false; endState=null; chatLog=[]; lastEvent=null;
     underworld=false;
     skillLock={used:false, by:null, type:null};
     moolgaiLock={usedBy:null};
@@ -353,7 +355,8 @@
     if(!isOnline || !isHost) return;
     const state = {
       seats, field, underworld, turnIdx, turnCount, phase, pendingAction,
-      skillLock, moolgaiLock, matchNo, revealDeclarer, hmsQueue
+      skillLock, moolgaiLock, matchNo, revealDeclarer, hmsQueue,
+      gameEnded, endState, chatLog, eventSeq, lastEvent
     };
     Object.values(guestConns).forEach(conn => {
       if(conn && conn.open) conn.send({type: 'SYNC_STATE', state});
@@ -512,6 +515,16 @@
         conn.send({type: 'WELCOME', mySeatId: emptySeat.id, seats});
         updateLobbyUI();
         broadcastLobbyState();
+        if(onlineLobbyStarted){
+          conn.send({type:'LOBBY_START'});
+          setTimeout(() => {
+            if(conn && conn.open) conn.send({type:'SYNC_STATE', state:{
+              seats, field, underworld, turnIdx, turnCount, phase, pendingAction,
+              skillLock, moolgaiLock, matchNo, revealDeclarer, hmsQueue,
+              gameEnded, endState, chatLog, eventSeq, lastEvent
+            }});
+          }, 100);
+        }
       } else {
         conn.send({type: 'FULL'});
       }
@@ -536,20 +549,39 @@
       document.getElementById('lobbyOverlay').classList.remove('show');
     }
     else if(data.type === 'SYNC_STATE'){
-      const oldState = {phase, turnIdx};
-      seats = data.state.seats;
-      field = data.state.field;
-      underworld = data.state.underworld;
-      turnIdx = data.state.turnIdx;
-      turnCount = data.state.turnCount;
-      phase = data.state.phase;
-      pendingAction = data.state.pendingAction;
-      skillLock = data.state.skillLock;
-      moolgaiLock = data.state.moolgaiLock;
-      matchNo = data.state.matchNo;
-      revealDeclarer = data.state.revealDeclarer;
-      hmsQueue = data.state.hmsQueue;
+      const st = data.state;
+      seats = st.seats;
+      field = st.field;
+      underworld = st.underworld;
+      turnIdx = st.turnIdx;
+      turnCount = st.turnCount;
+      phase = st.phase;
+      pendingAction = st.pendingAction;
+      skillLock = st.skillLock;
+      moolgaiLock = st.moolgaiLock;
+      matchNo = st.matchNo;
+      revealDeclarer = st.revealDeclarer;
+      hmsQueue = st.hmsQueue;
+      gameEnded = !!st.gameEnded;
+      endState = st.endState || null;
+      chatLog = Array.isArray(st.chatLog) ? st.chatLog : [];
+
+      if(st.eventSeq && st.eventSeq !== eventSeq){
+        eventSeq = st.eventSeq;
+        lastEvent = st.lastEvent || null;
+        if(lastEvent && lastEvent.type === 'moolgai') showMoolgaiFlash();
+      } else {
+        eventSeq = st.eventSeq || eventSeq;
+        lastEvent = st.lastEvent || lastEvent;
+      }
+
+      renderChat();
       render();
+      if(gameEnded && endState){
+        showEndOverlay(endState.title, endState.revealHTML, endState.body, null, !!endState.sessionOver, true);
+      } else if(!gameEnded){
+        document.getElementById('overlay').classList.remove('show');
+      }
     }
   }
 
@@ -573,12 +605,18 @@
     if(isOnline) return seatId === mySeatId ? document.getElementById('selfArea') : null;
     return seatId === activeId() ? document.getElementById('selfArea') : null;
   }
-  function addChatLog(html){
+  function renderChat(){
     const box = document.getElementById('mcChat');
-    const line = document.createElement('div');
-    line.className='mc-line'; line.innerHTML=html;
-    box.appendChild(line);
+    if(!box) return;
+    box.innerHTML = chatLog.slice(-12).map(html => `<div class="mc-line">${html}</div>`).join('');
     box.scrollTop = box.scrollHeight;
+  }
+  function addChatLog(html){
+    if(!chatLog.includes(html) || chatLog[chatLog.length-1] !== html){
+      chatLog.push(html);
+      if(chatLog.length > 50) chatLog.shift();
+    }
+    renderChat();
   }
   function declare(seatId, text){
     sfx.declare();
@@ -590,6 +628,7 @@
       setTimeout(()=>b.remove(), 2100);
     }
     addChatLog(`<b>${seatById(seatId).name}</b>は「${text}」と宣言した。`);
+    if(isHost) broadcastState();
   }
   function showMoolgaiFlash(){
     sfx.moolgai();
@@ -613,6 +652,7 @@
   }
 
   function render(){
+    renderChat();
     document.body.classList.toggle('underworld', underworld);
     document.getElementById('modePill').textContent = underworld ? '冥界' : '現世';
     document.getElementById('matchPill').textContent = '試合 ' + matchNo;
@@ -673,6 +713,10 @@
   function renderCommandPanel(){
     const panel = document.getElementById('commandPanel');
     panel.innerHTML = '';
+    if(gameEnded || phase==='ended'){
+      addBtn(panel, '試合終了', ()=>{}, true);
+      return;
+    }
 
     const isMyTurn = isOnline ? (activeId()===mySeatId) : true;
 
@@ -816,6 +860,7 @@
     }
     phase='end-choice';
     setMessage('ラトン → ' + DIR_TERM[dir]);
+    declare(active.id, 'ラトン→' + DIR_TERM[dir]);
     render();
     flashFieldSlot(dir);
     selectedHandIdx=null;
@@ -834,8 +879,15 @@
   function foul(seatId, wrongLabel){
     sfx.foul();
     const seat = seatById(seatId);
+    const title = '指摘されました';
+    const body = `${seat.name}が「${wrongLabel}」と誤った宣言をした。ルール違反のため、この試合は終了する（ペナルティなし）。`;
     addChatLog(`<b>${seat.name}</b>が「${wrongLabel}」と誤って宣言し、指摘された。`);
-    showEndOverlay('指摘されました', null, `${seat.name}が「${wrongLabel}」と誤った宣言をした。ルール違反のため、この試合は終了する（ペナルティなし）。`, null, false);
+    gameEnded = true;
+    endState = {title, revealHTML:'', body, sessionOver:false};
+    phase = 'ended';
+    pendingAction = null;
+    selectedHandIdx = null;
+    showEndOverlay(title, '', body, null, false, true);
     if(isHost) broadcastState();
   }
 
@@ -846,6 +898,8 @@
     if(isMoolgai){
       moolgaiLock = {usedBy:seatId};
       revealDeclarer = seatId;
+      eventSeq++;
+      lastEvent = {seq:eventSeq, type:'moolgai', seatId, text:'ムールガイ！'};
       showMoolgaiFlash();
     }
     phase='idle'; pendingAction=null; selectedHandIdx=null;
@@ -986,7 +1040,12 @@
       ? `${winner.name}が銅の電球を2個点灯させ、WINNERとなった。（この試合の得点：${maxPts}）`
       : `${winner.name}が優勝（${maxPts}pt）。ランプが1個点灯した。`;
 
-    showEndOverlay(title, html, body, scored, sessionOver);
+    gameEnded = true;
+    endState = {title, revealHTML:html, body, sessionOver};
+    phase = 'ended';
+    pendingAction = null;
+    selectedHandIdx = null;
+    showEndOverlay(title, html, body, scored, sessionOver, true);
     if(isHost) broadcastState();
   }
 
@@ -1007,7 +1066,7 @@
     if(isHost) broadcastState();
   }
 
-  function showEndOverlay(title, revealHTML, body, scored, sessionOver){
+  function showEndOverlay(title, revealHTML, body, scored, sessionOver, fromSync=false){
     document.getElementById('overlayTitle').textContent = title;
     document.getElementById('overlayReveal').innerHTML = revealHTML || '';
     document.getElementById('overlayBody').textContent = body;
@@ -1029,11 +1088,11 @@
       btnRow.innerHTML='<span style="font-size:11px;color:var(--papyrus-dim);">ホストの操作を待っています...</span>';
     } else if(sessionOver){
       sfx.win(); const again=document.createElement('button'); again.textContent='もう一度';
-      again.addEventListener('click',()=>{ sfx.click(); document.getElementById('overlay').classList.remove('show'); seats.forEach(s=>{s.lamps=0;s.score=0;}); matchNo=1; newMatchDeal(); render(); if(isHost) broadcastState(); });
+      again.addEventListener('click',()=>{ sfx.click(); document.getElementById('overlay').classList.remove('show'); seats.forEach(s=>{s.lamps=0;s.score=0;}); matchNo=1; gameEnded=false; endState=null; newMatchDeal(); render(); if(isHost) broadcastState(); });
       btnRow.appendChild(again);
     } else {
       const next=document.createElement('button'); next.textContent='次の試合へ';
-      next.addEventListener('click',()=>{ sfx.click(); document.getElementById('overlay').classList.remove('show'); matchNo++; newMatchDeal(); render(); if(isHost) broadcastState(); });
+      next.addEventListener('click',()=>{ sfx.click(); document.getElementById('overlay').classList.remove('show'); matchNo++; gameEnded=false; endState=null; newMatchDeal(); render(); if(isHost) broadcastState(); });
       btnRow.appendChild(next);
     }
     document.getElementById('overlay').classList.add('show');
