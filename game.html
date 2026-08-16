@@ -274,67 +274,55 @@
   function roundScoreFor(seat){ return underworld ? total(seat.hand) : evaluateScore(seat.hand); }
 
   let audioCtx = null, sfxOn = true;
-  let audioUnlocked = false;
-  let audioUnlockPromise = null;
-  let remoteSoundSeq = 0;
-  let lastSound = null;
+  let audioReady = false;
 
-  function warmupAudio(ctx){
-    if(!ctx) return;
-    try{
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      gain.gain.setValueAtTime(0.00001, ctx.currentTime);
-      osc.connect(gain); gain.connect(ctx.destination);
-      osc.start(); osc.stop(ctx.currentTime + 0.03);
-    }catch(e){}
-  }
   function ensureAudio(){
     if(!sfxOn) return null;
-    if(!audioCtx){ try{ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return null; } }
-    if(audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
+    if(!audioCtx){
+      try{ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }
+      catch(e){ return null; }
+    }
     return audioCtx;
   }
-  function unlockAudio(){
-    if(audioUnlocked && audioCtx && audioCtx.state === 'running') return Promise.resolve();
+
+  async function unlockAudio(){
     const ctx = ensureAudio();
-    if(!ctx) return Promise.resolve();
-    warmupAudio(ctx);
-    if(ctx.state === 'running'){
-      audioUnlocked = true;
-      return Promise.resolve();
-    }
-    if(!audioUnlockPromise){
-      audioUnlockPromise = ctx.resume().then(()=>{
-        audioUnlocked = ctx.state === 'running';
-        if(audioUnlocked) warmupAudio(ctx);
-      }).catch(()=>{}).finally(()=>{ audioUnlockPromise=null; });
-    }
-    return audioUnlockPromise;
+    if(!ctx) return false;
+    try{
+      if(ctx.state !== 'running') await ctx.resume();
+      audioReady = ctx.state === 'running';
+      if(audioReady){
+        // A virtually silent oscillator warms up iOS/Safari audio output.
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.00001, ctx.currentTime);
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.start(); osc.stop(ctx.currentTime + 0.03);
+      }
+    }catch(e){ audioReady=false; }
+    return audioReady;
   }
+
   function tone(freq, dur, type, vol, delay){
-    const ctx = ensureAudio(); if(!ctx) return;
-    const play = ()=>{
-      if(!audioCtx || audioCtx.state !== 'running') return;
-      const t0 = audioCtx.currentTime + (delay||0);
-      const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
-      osc.type = type||'sine'; osc.frequency.setValueAtTime(freq, t0);
-      gain.gain.setValueAtTime(0, t0);
-      gain.gain.linearRampToValueAtTime(vol||0.12, t0+0.02);
-      gain.gain.exponentialRampToValueAtTime(0.001, t0+dur);
-      osc.connect(gain); gain.connect(audioCtx.destination);
-      osc.start(t0); osc.stop(t0+dur+0.02);
+    const ctx = ensureAudio();
+    if(!ctx) return;
+    const play=()=>{
+      if(ctx.state !== 'running') return;
+      const t0=ctx.currentTime+(delay||0);
+      const osc=ctx.createOscillator();
+      const gain=ctx.createGain();
+      osc.type=type||'sine';
+      osc.frequency.setValueAtTime(freq,t0);
+      gain.gain.setValueAtTime(0,t0);
+      gain.gain.linearRampToValueAtTime(vol||0.12,t0+0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001,t0+dur);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(t0); osc.stop(t0+dur+0.03);
     };
-    if(ctx.state === 'running'){ play(); return; }
-    ctx.resume().then(()=>{ audioUnlocked = ctx.state === 'running'; if(audioUnlocked) play(); }).catch(()=>{});
-    const osc = ctx.createOscillator(); const gain = ctx.createGain();
-    osc.type = type||'sine'; osc.frequency.setValueAtTime(freq, t0);
-    gain.gain.setValueAtTime(0, t0);
-    gain.gain.linearRampToValueAtTime(vol||0.12, t0+0.02);
-    gain.gain.exponentialRampToValueAtTime(0.001, t0+dur);
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.start(t0); osc.stop(t0+dur+0.02);
+    if(ctx.state==='running') play();
+    else unlockAudio().then(ok=>{ if(ok) play(); });
   }
+
   const sfx = {
     click: () => tone(520, .08, 'triangle', .1),
     declare: () => tone(700, .12, 'sine', .12),
@@ -351,7 +339,9 @@
     if(!isOnline || !isHost) return;
     remoteSoundSeq++;
     lastSound = type;
-    broadcastState();
+    Object.values(guestConns).forEach(conn=>{
+      if(conn && conn.open) conn.send({type:'SOUND_EVENT', sound:type, seq:remoteSoundSeq});
+    });
   }
 
   /* ============ State & Params ============ */
@@ -587,8 +577,30 @@
     }
   }
 
+  function playRemoteSound(sound){
+    if(!sfxOn) return;
+    const run=()=>{
+      if(sound==='click') sfx.click();
+      else if(sound==='declare') sfx.declare();
+      else if(sound==='swap') sfx.swap();
+      else if(sound==='moolgai') sfx.moolgai();
+      else if(sound==='foul') sfx.foul();
+      else if(sound==='lamp') sfx.lamp();
+      else if(sound==='win') sfx.win();
+      else if(sound==='ashuraHit') sfx.ashuraHit();
+      else if(sound==='ashuraMiss') sfx.ashuraMiss();
+    };
+    if(audioReady || (audioCtx && audioCtx.state==='running')) run();
+    else unlockAudio().then(ok=>{ if(ok) run(); });
+  }
+
   function handleClientData(data){
-    if(data.type === 'WELCOME'){
+    if(data.type === 'SOUND_EVENT') {
+      // Remote sound events are deliberately separate from SYNC_STATE so a sound
+      // is never lost because two state snapshots arrive close together.
+      if(data.sound) playRemoteSound(data.sound);
+    }
+    else if(data.type === 'WELCOME'){
       mySeatId = data.mySeatId;
       seats = data.seats;
       updateLobbyUI();
@@ -694,7 +706,7 @@
   }
   function declare(seatId, text){
     sfx.declare();
-    if(isOnline && isHost){ remoteSoundSeq++; lastSound='declare'; }
+    if(isOnline && isHost){ broadcastSound('declare'); }
     if(isOnline && isHost){ eventSeq++; lastEvent={type:'declare', seatId, text}; }
     const anchor = bubbleAnchorFor(seatId);
     if(anchor){
@@ -716,6 +728,7 @@
   }
   function flashFieldSlot(dir){
     sfx.swap();
+    if(isOnline && isHost) broadcastSound('swap');
     const slot = document.querySelector('.fs-'+dir+' .card');
     if(slot){ slot.classList.add('new-swap'); setTimeout(()=>slot.classList.remove('new-swap'), 1100); }
   }
@@ -964,7 +977,7 @@
 
   function foul(seatId, wrongLabel){
     sfx.foul();
-    if(isOnline && isHost){ remoteSoundSeq++; lastSound='foul'; }
+    if(isOnline && isHost){ broadcastSound('foul'); }
     const seat = seatById(seatId);
     const title = '指摘されました';
     const body = `${seat.name}が「${wrongLabel}」と誤った宣言をした。ルール違反のため、この試合は終了する（ペナルティなし）。`;
@@ -984,6 +997,7 @@
     revealDeclarer = seatId;
     eventSeq++;
     lastEvent = {seq:eventSeq, type:'moolgai', seatId, text:'ムールガイ！'};
+    if(isOnline && isHost) broadcastSound('moolgai');
     showMoolgaiFlash();
   }
 
@@ -1120,7 +1134,7 @@
     const winner = winners[rnd(winners.length)].seat;
     winner.lamps = Math.min(2, winner.lamps+1);
     sfx.lamp();
-    if(isOnline && isHost){ eventSeq++; lastEvent={type:'matchEnd', winnerId:winner.id}; }
+    if(isOnline && isHost){ eventSeq++; lastEvent={type:'matchEnd', winnerId:winner.id}; broadcastSound('lamp'); }
     addChatLog(`試合${matchNo}: <b>${winner.name}</b>が優勝（${maxPts}pt）。`);
 
     const html = revealGridHTML(scored, winner);
@@ -1149,12 +1163,12 @@
     if(hit){
       seatById(accuserSeatId).score += 1;
       sfx.ashuraHit();
-      if(isOnline && isHost){ remoteSoundSeq++; lastSound='ashuraHit'; }
+      if(isOnline && isHost){ broadcastSound('ashuraHit'); }
       fb.textContent = `アシュラってる！ → ${targetSeat.name}を的中（+1）`;
       addChatLog(`<b>${seatById(accuserSeatId).name}</b>「アシュラってる！」→ ${targetSeat.name}的中（+1）`);
     } else {
       sfx.ashuraMiss();
-      if(isOnline && isHost){ remoteSoundSeq++; lastSound='ashuraMiss'; }
+      if(isOnline && isHost){ broadcastSound('ashuraMiss'); }
       fb.textContent = `アシュラってる！ → ${targetSeat.name}は空振り`;
       addChatLog(`<b>${seatById(accuserSeatId).name}</b>「アシュラってる！」→ ${targetSeat.name}空振り`);
     }
@@ -1204,8 +1218,8 @@
     render();
   }
 
-  ['pointerdown','touchstart','keydown'].forEach(ev=>{
-    document.addEventListener(ev, ()=>{ unlockAudio(); }, {passive:true});
+  ['pointerdown','touchstart','touchend','keydown','click'].forEach(ev=>{
+    document.addEventListener(ev, ()=>{ if(sfxOn) unlockAudio(); }, {passive:true, capture:true});
   });
   document.addEventListener('visibilitychange', ()=>{
     if(document.visibilityState === 'visible' && audioCtx && sfxOn && audioCtx.state !== 'running'){ unlockAudio(); }
